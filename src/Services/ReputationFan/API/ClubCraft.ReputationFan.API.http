@@ -1,0 +1,6 @@
+@ClubCraft.ReputationFan.API_HostAddress = http://localhost:5135
+
+GET {{ClubCraft.ReputationFan.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

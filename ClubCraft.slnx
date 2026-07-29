@@ -1,0 +1,98 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/ApiGateway/">
+    <Project Path="src/ApiGateway/ClubCraft.ApiGateway.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/" />
+  <Folder Name="/src/BuildingBlocks/Common/">
+    <Project Path="src/BuildingBlocks/Common/ClubCraft.BuildingBlocks.Common.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/Contracts/">
+    <Project Path="src/BuildingBlocks/Contracts/ClubCraft.BuildingBlocks.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/Messaging/">
+    <Project Path="src/BuildingBlocks/Messaging/ClubCraft.BuildingBlocks.Messaging.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/ClubManagement/" />
+  <Folder Name="/src/Services/ClubManagement/API/">
+    <Project Path="src/Services/ClubManagement/API/ClubCraft.ClubManagement.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ClubManagement/Application/">
+    <Project Path="src/Services/ClubManagement/Application/ClubCraft.ClubManagement.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ClubManagement/Domain/">
+    <Project Path="src/Services/ClubManagement/Domain/ClubCraft.ClubManagement.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ClubManagement/Infrastructure/">
+    <Project Path="src/Services/ClubManagement/Infrastructure/ClubCraft.ClubManagement.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Draft/" />
+  <Folder Name="/src/Services/Draft/API/">
+    <Project Path="src/Services/Draft/API/ClubCraft.Draft.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Draft/Application/">
+    <Project Path="src/Services/Draft/Application/ClubCraft.Draft.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Draft/Domain/">
+    <Project Path="src/Services/Draft/Domain/ClubCraft.Draft.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Draft/Infrastructure/">
+    <Project Path="src/Services/Draft/Infrastructure/ClubCraft.Draft.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/FinanceSponsorship/" />
+  <Folder Name="/src/Services/FinanceSponsorship/API/">
+    <Project Path="src/Services/FinanceSponsorship/API/ClubCraft.FinanceSponsorship.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/FinanceSponsorship/Application/">
+    <Project Path="src/Services/FinanceSponsorship/Application/ClubCraft.FinanceSponsorship.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/FinanceSponsorship/Domain/">
+    <Project Path="src/Services/FinanceSponsorship/Domain/ClubCraft.FinanceSponsorship.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/FinanceSponsorship/Infrastructure/">
+    <Project Path="src/Services/FinanceSponsorship/Infrastructure/ClubCraft.FinanceSponsorship.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/MatchEngine/" />
+  <Folder Name="/src/Services/MatchEngine/API/">
+    <Project Path="src/Services/MatchEngine/API/ClubCraft.MatchEngine.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/MatchEngine/Application/">
+    <Project Path="src/Services/MatchEngine/Application/ClubCraft.MatchEngine.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/MatchEngine/Domain/">
+    <Project Path="src/Services/MatchEngine/Domain/ClubCraft.MatchEngine.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/MatchEngine/Infrastructure/">
+    <Project Path="src/Services/MatchEngine/Infrastructure/ClubCraft.MatchEngine.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/RealtimeHub/">
+    <Project Path="src/Services/RealtimeHub/ClubCraft.RealtimeHub.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ReputationFan/" />
+  <Folder Name="/src/Services/ReputationFan/API/">
+    <Project Path="src/Services/ReputationFan/API/ClubCraft.ReputationFan.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ReputationFan/Application/">
+    <Project Path="src/Services/ReputationFan/Application/ClubCraft.ReputationFan.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ReputationFan/Domain/">
+    <Project Path="src/Services/ReputationFan/Domain/ClubCraft.ReputationFan.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/ReputationFan/Infrastructure/">
+    <Project Path="src/Services/ReputationFan/Infrastructure/ClubCraft.ReputationFan.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Session/" />
+  <Folder Name="/src/Services/Session/API/">
+    <Project Path="src/Services/Session/API/ClubCraft.Session.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Session/Application/">
+    <Project Path="src/Services/Session/Application/ClubCraft.Session.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Session/Domain/">
+    <Project Path="src/Services/Session/Domain/ClubCraft.Session.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Session/Infrastructure/">
+    <Project Path="src/Services/Session/Infrastructure/ClubCraft.Session.Infrastructure.csproj" />
+  </Folder>
+</Solution>

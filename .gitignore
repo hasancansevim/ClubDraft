@@ -1,0 +1,23 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Env
+.env
+*.env.local
+
+## Node (frontend eklenince)
+node_modules/
+dist/
+build/

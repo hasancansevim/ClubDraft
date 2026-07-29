@@ -1,0 +1,105 @@
+version: "3.9"
+
+# ClubCraft - Altyapı bileşenleri (mesajlaşma, cache, veritabanları)
+# Servislerin kendi Dockerfile'ları ve API konteynerleri, servis projeleri
+# oluşturulduktan sonra bu dosyaya eklenecek.
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: clubcraft-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: clubcraft
+      RABBITMQ_DEFAULT_PASS: clubcraft
+
+  redis:
+    image: redis:7-alpine
+    container_name: clubcraft-redis
+    ports:
+      - "6379:6379"
+
+  # --- PostgreSQL: database-per-service ---
+  session-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-session-db
+    environment:
+      POSTGRES_DB: session
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5433:5432"
+
+  draft-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-draft-db
+    environment:
+      POSTGRES_DB: draft
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5434:5432"
+
+  clubmanagement-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-clubmanagement-db
+    environment:
+      POSTGRES_DB: clubmanagement
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5435:5432"
+
+  matchengine-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-matchengine-db
+    environment:
+      POSTGRES_DB: matchengine
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5436:5432"
+
+  reputationfan-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-reputationfan-db
+    environment:
+      POSTGRES_DB: reputationfan
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5437:5432"
+
+  financesponsorship-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-financesponsorship-db
+    environment:
+      POSTGRES_DB: financesponsorship
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5438:5432"
+
+# --- Servis API konteynerleri (API'ler oluşturulunca eklenecek) ---
+#  session-api:
+#    build: ../src/Services/Session/API
+#    depends_on: [session-db, rabbitmq]
+#    ports: ["5001:8080"]
+#
+#  draft-api:
+#    build: ../src/Services/Draft/API
+#    depends_on: [draft-db, rabbitmq, redis]
+#    ports: ["5002:8080"]
+#
+#  ... (diğer servisler için aynı pattern)
+#
+#  apigateway:
+#    build: ../src/ApiGateway
+#    ports: ["5000:8080"]
+#
+#  realtimehub:
+#    build: ../src/Services/RealtimeHub
+#    depends_on: [redis]
+#    ports: ["5010:8080"]

@@ -1,0 +1,6 @@
+@ClubCraft.Draft.API_HostAddress = http://localhost:5042
+
+GET {{ClubCraft.Draft.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
