@@ -1,16 +1,13 @@
-namespace ClubCraft.BuildingBlocks.Contracts.Events;
+namespace ClubCraft.BuildingBlocks.Contracts.Commands;
 
-public interface IPlayerClaimedEvent
+public interface IAddPlayerToRosterCommand
 {
     Guid PickAttemptId { get; }
-    Guid DraftSessionId { get; }
     Guid ClubId { get; }
     Guid PlayerId { get; }
-    int PickNumber { get; }
     string Name { get; }
     string Position { get; }
     int Overall { get; }
     int Age { get; }
     decimal MarketValue { get; }
-    DateTime OccurredOn { get; }
 }

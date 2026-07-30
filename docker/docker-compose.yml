@@ -6,7 +6,9 @@ version: "3.9"
 
 services:
   rabbitmq:
-    image: rabbitmq:3-management
+    build:
+      context: .
+      dockerfile: Dockerfile.rabbitmq
     container_name: clubcraft-rabbitmq
     ports:
       - "5672:5672"   # AMQP
@@ -81,6 +83,16 @@ services:
       POSTGRES_PASSWORD: clubcraft
     ports:
       - "5438:5432"
+
+  sagaorchestrator-db:
+    image: postgres:16-alpine
+    container_name: clubcraft-sagaorchestrator-db
+    environment:
+      POSTGRES_DB: sagaorchestrator
+      POSTGRES_USER: clubcraft
+      POSTGRES_PASSWORD: clubcraft
+    ports:
+      - "5439:5432"
 
 # --- Servis API konteynerleri (API'ler oluşturulunca eklenecek) ---
 #  session-api:

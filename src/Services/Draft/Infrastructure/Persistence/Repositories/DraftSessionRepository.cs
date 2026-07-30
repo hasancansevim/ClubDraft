@@ -49,10 +49,16 @@ public class DraftSessionRepository : IDraftSessionRepository
                 case PlayerClaimedEvent claimedEvent:
                     await _publishEndpoint.Publish<IPlayerClaimedEvent>(new
                     {
+                        PickAttemptId = claimedEvent.PickAttemptId,
                         DraftSessionId = claimedEvent.DraftSessionId,
                         ClubId = claimedEvent.ClubId,
                         PlayerId = claimedEvent.PlayerId,
                         PickNumber = claimedEvent.PickNumber,
+                        Name = claimedEvent.Name,
+                        Position = claimedEvent.Position,
+                        Overall = claimedEvent.Overall,
+                        Age = claimedEvent.Age,
+                        MarketValue = claimedEvent.MarketValue,
                         OccurredOn = claimedEvent.OccurredOn
                     }, cancellationToken);
                     break;

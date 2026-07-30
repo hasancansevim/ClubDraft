@@ -83,7 +83,8 @@ public class DraftSession : AggregateRoot<Guid>
         var pick = new DraftPick(pickNumber, clubId, playerId, DateTime.UtcNow);
         _picks.Add(pick);
 
-        AddDomainEvent(new PlayerClaimedEvent(Id, clubId, playerId, pickNumber));
+        var pickAttemptId = Guid.NewGuid();
+        AddDomainEvent(new PlayerClaimedEvent(pickAttemptId, Id, clubId, playerId, pickNumber, playerItem.Snapshot.Name, playerItem.Snapshot.Position, playerItem.Snapshot.Overall, playerItem.Snapshot.Age, playerItem.Snapshot.MarketValue));
 
         CurrentPickIndex++;
 
@@ -98,7 +99,7 @@ public class DraftSession : AggregateRoot<Guid>
         }
     }
 
-    public void RevertClaim(Guid playerId)
+    public void RevertClaim(Guid pickAttemptId, Guid playerId)
     {
         // Compensating action for Saga
         var pick = _picks.LastOrDefault(p => p.PlayerId == playerId);
@@ -122,6 +123,6 @@ public class DraftSession : AggregateRoot<Guid>
         // Eğer draft completed olmuşsa geri çekildiğinde durum InProgress'e dönmeli
         Status = DraftStatus.InProgress;
 
-        AddDomainEvent(new PlayerClaimRevertedEvent(Id, playerId, affectedClubId));
+        AddDomainEvent(new PlayerClaimRevertedEvent(pickAttemptId, Id, playerId, affectedClubId));
     }
 }

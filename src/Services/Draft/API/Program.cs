@@ -59,10 +59,17 @@ builder.Services.AddMassTransit(x =>
         o.UsePostgres();
         o.UseBusOutbox();
     });
+    x.AddConsumer<ClubCraft.Draft.API.Consumers.ReleasePlayerClaimCommandConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host(builder.Configuration.GetConnectionString("RabbitMQ"));
+        
+        cfg.ReceiveEndpoint("draft-commands", e =>
+        {
+            e.ConfigureConsumer<ClubCraft.Draft.API.Consumers.ReleasePlayerClaimCommandConsumer>(context);
+        });
+
         cfg.ConfigureEndpoints(context);
     });
 });
