@@ -13,7 +13,6 @@ public class DraftPick : Entity<Guid>
 
     public DraftPick(int pickNumber, Guid clubId, Guid playerId, DateTime claimedAt)
     {
-        Id = Guid.NewGuid();
         PickNumber = pickNumber;
         ClubId = clubId;
         PlayerId = playerId;

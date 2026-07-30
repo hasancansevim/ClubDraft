@@ -22,7 +22,7 @@ public class DraftSession : AggregateRoot<Guid>
     private readonly List<DraftPick> _picks = new();
     public IReadOnlyCollection<DraftPick> Picks => _picks.AsReadOnly();
 
-    public byte[] RowVersion { get; private set; } // Optimistic Concurrency
+
 
     private DraftSession() { } // EF Core
 
