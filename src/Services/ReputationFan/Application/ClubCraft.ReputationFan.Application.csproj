@@ -2,6 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Domain\ClubCraft.ReputationFan.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Contracts\ClubCraft.BuildingBlocks.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MassTransit.Abstractions" Version="8.2.2" />
   </ItemGroup>
 
   <PropertyGroup>
