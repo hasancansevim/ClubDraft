@@ -91,7 +91,7 @@ public class DraftSession : AggregateRoot<Guid>
         if (CurrentPickIndex >= _turnOrder.Count)
         {
             Status = DraftStatus.Completed;
-            AddDomainEvent(new DraftCompletedEvent(Id));
+            AddDomainEvent(new DraftCompletedEvent(Id, _turnOrder.Distinct()));
         }
         else
         {

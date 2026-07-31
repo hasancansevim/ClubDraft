@@ -1,41 +1,68 @@
+using ClubCraft.MatchEngine.Application.Commands.GenerateFixture;
+using ClubCraft.MatchEngine.Application.Consumers;
+using ClubCraft.MatchEngine.Domain.Services;
+using ClubCraft.MatchEngine.Infrastructure;
+using ClubCraft.MatchEngine.Infrastructure.Persistence;
+using MassTransit;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// MediatR
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(GenerateFixtureCommand).Assembly));
+
+// Infrastructure (DbContext, Repositories)
+builder.Services.AddInfrastructure(builder.Configuration);
+
+// Domain Services
+builder.Services.AddTransient<IFixtureGenerator, RoundRobinFixtureGenerator>();
+builder.Services.AddTransient<IMatchSimulator, MatchSimulator>();
+
+// MassTransit
+builder.Services.AddMassTransit(x =>
+{
+    x.AddEntityFrameworkOutbox<MatchEngineDbContext>(o =>
+    {
+        o.UsePostgres();
+        o.UseBusOutbox();
+    });
+
+    x.AddConsumer<DraftCompletedEventConsumer>();
+    x.AddConsumer<AllParticipantsReadyForNextWeekEventConsumer>();
+    x.AddConsumer<PlayerAddedToRosterCommandConsumer>();
+    x.AddConsumer<PlayerRemovedFromRosterCommandConsumer>();
+    x.AddConsumer<WeeklyDecisionMadeEventConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMQ:Host"] ?? "localhost", "/", h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
+        });
+
+        cfg.ReceiveEndpoint("match-engine-events", e =>
+        {
+            e.UseEntityFrameworkOutbox<MatchEngineDbContext>(context);
+            e.ConfigureConsumer<DraftCompletedEventConsumer>(context);
+            e.ConfigureConsumer<AllParticipantsReadyForNextWeekEventConsumer>(context);
+            e.ConfigureConsumer<PlayerAddedToRosterCommandConsumer>(context);
+            e.ConfigureConsumer<PlayerRemovedFromRosterCommandConsumer>(context);
+            e.ConfigureConsumer<WeeklyDecisionMadeEventConsumer>(context);
+        });
+    });
+});
+
+builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

@@ -1,41 +1,55 @@
+using Microsoft.EntityFrameworkCore;
+using MassTransit;
+using ClubCraft.ClubManagement.Application;
+using ClubCraft.ClubManagement.Infrastructure;
+using ClubCraft.ClubManagement.API.Consumers;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure("Host=127.0.0.1;Port=5435;Database=clubmanagement;Username=clubcraft;Password=clubcraft;");
+
+builder.Services.AddMassTransit(x =>
+{
+    x.AddEntityFrameworkOutbox<ClubCraft.ClubManagement.Infrastructure.Persistence.ClubDbContext>(o =>
+    {
+        o.UsePostgres();
+        o.UseBusOutbox();
+    });
+
+    x.AddConsumer<AddPlayerToRosterCommandConsumer>();
+    x.AddConsumer<ReleasePlayerFromRosterCommandConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("127.0.0.1", "/", h =>
+        {
+            h.Username("clubcraft");
+            h.Password("clubcraft");
+        });
+
+        cfg.ReceiveEndpoint("club-management-commands", e =>
+        {
+            e.ConfigureConsumer<AddPlayerToRosterCommandConsumer>(context);
+            e.ConfigureConsumer<ReleasePlayerFromRosterCommandConsumer>(context);
+        });
+
+        cfg.ConfigureEndpoints(context);
+    });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

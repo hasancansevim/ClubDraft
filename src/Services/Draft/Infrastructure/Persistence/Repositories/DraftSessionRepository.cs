@@ -95,6 +95,7 @@ public class DraftSessionRepository : IDraftSessionRepository
                     await _publishEndpoint.Publish<IDraftCompletedEvent>(new
                     {
                         DraftSessionId = completedEvent.DraftSessionId,
+                        ClubIds = completedEvent.ClubIds,
                         OccurredOn = completedEvent.OccurredOn
                     }, cancellationToken);
                     break;

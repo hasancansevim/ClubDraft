@@ -9,8 +9,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
-        services.AddDbContext<ClubDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContext<ClubDbContext>((sp, options) =>
+        {
+            options.UseNpgsql(connectionString);
+        });
 
         services.AddScoped<IClubRepository, ClubRepository>();
 

@@ -1,6 +1,0 @@
-@ClubCraft.ClubManagement.API_HostAddress = http://localhost:5276
-
-GET {{ClubCraft.ClubManagement.API_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
