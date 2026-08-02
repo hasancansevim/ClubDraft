@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\Common\ClubCraft.BuildingBlocks.Common.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Contracts\ClubCraft.BuildingBlocks.Contracts.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

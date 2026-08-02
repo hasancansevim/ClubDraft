@@ -1,4 +1,4 @@
-@ClubCraft.FinanceSponsorship.API_HostAddress = http://localhost:5290
+@ClubCraft.FinanceSponsorship.API_HostAddress = http://localhost:5135
 
 GET {{ClubCraft.FinanceSponsorship.API_HostAddress}}/weatherforecast/
 Accept: application/json
