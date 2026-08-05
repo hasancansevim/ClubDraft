@@ -242,7 +242,94 @@ POST /sponsorship-offers/{offerId}/respond
 
 ---
 
+> ⚠️ **Idempotency notu (ClubManagement kurulumunda keşfedildi):** RabbitMQ
+> at-least-once teslimat garantisi verir, yani bir integration event (örn.
+> `PlayerAddedToRosterEvent`) birden fazla kez teslim edilebilir. Event'i
+> **üreten** servis kendi state'inde idempotent davransa bile (örn. aynı
+> oyuncuyu iki kez roster'a eklemez), event'i **tüketen** her servis
+> (Reputation & Fan, Finance & Sponsorship, Match Engine) kendi tarafında da
+> "bu event ID'sini daha önce işledim mi" kontrolü yapmalı — MassTransit'in
+> **Inbox pattern**'i (Outbox'ın tüketici tarafındaki eşleniği) bunun için
+> kullanılacak. Her yeni event tüketici servis yazılırken bu unutulmamalı.
+
+---
+
+## 4.9 Draft Pick Saga — Finalize Edilmiş Tasarım
+
+**Correlation:** `PlayerClaimedEvent` (ve zincirdeki tüm event/command'lar) bir `PickAttemptId` (Guid) taşır — Draft servisinde her `ClaimPlayer()` çağrısında üretilir. Saga bu ID üzerinden correlate eder (`PlayerId` değil — aynı oyuncu farklı zamanlarda tekrar claim edilebileceği için).
+
+**Timeout:** `AddingToRoster` state'ine girerken MassTransit `UseDelayedMessageScheduler` (RabbitMQ delayed exchange, `Dockerfile.rabbitmq` ile etkinleştirilir) ile 30 saniyelik timeout zamanlanır. Başarı/hata event'i gelirse `Unschedule` edilir.
+
+**State Diyagramı:**
+```text
+(Start)
+   |
+   | [PlayerClaimedEvent (PickAttemptId)]
+   v
+[AddingToRoster] -------------------------------------------------------------
+   |                                    |                                    |
+   | [PlayerAddedToRosterEvent]         | [PlayerRosterAdditionFailedEvent]  | [Timeout Expired (30s)]
+   v                                    v                                    v
+(Final)                          [RevertingDraftClaim]               [RevertingDraftClaim]
+                                        |                                    |
+                                        | (Sends ReleasePlayerClaimCommand)  | (Sends ReleasePlayerClaimCommand)
+                                        |                                    |
+                                        |   <-----------------------------   |
+                                        |   | [PlayerAddedToRosterEvent] |   |
+                                        |   | (Gecikmiş başarı — race)   |   |
+                                        |   | -> ReleasePlayerFromRosterCommand
+                                        |   |                            |   |
+                                        | [PlayerClaimRevertedEvent]         | [PlayerClaimRevertedEvent]
+                                        v                                    v
+                                     (Final)                              (Final)
+                                        |
+                                        | [Geç Gelen / Tekrarlayan Event'ler]
+                                        v
+                                     (Ignore - sessizce yutulur)
+```
+
+**Kritik edge-case (race condition):** `RevertingDraftClaim` state'indeyken gecikmeli bir `PlayerAddedToRosterEvent` gelirse (ClubManagement aslında başarılı olmuş ama geç bildirmiş), saga `ReleasePlayerFromRosterCommand` gönderir — bu, `Club.RemovePlayerFromRoster(playerId)` metodunu tetikleyen gerçek bir düzeltici komuttur (başlangıçta "no-op iskelet" olarak düşünülmüştü, bu senaryo sayesinde gerçek işlevine kavuştu).
+
+**`Final` state'te:** Tüm event'ler `Ignore()` ile açıkça yok sayılır — varsayılan davranışa bırakılmaz.
+
+**Idempotency notu:** RabbitMQ at-least-once teslimat yaptığı için event tüketen her servis (Reputation & Fan, Finance & Sponsorship dahil) kendi tarafında Inbox pattern uygulamalı — bkz. §5 üstündeki uyarı notu.
+
+**Host kararı:** Saga, `SagaOrchestrator` adında bağımsız bir Worker Service'te (API'siz, sadece BackgroundService/Generic Host) host edilir, kendi PostgreSQL instance'ı (`sagaorchestrator-db`) ile saga state'ini (`DraftPickState`) EF Core Saga Repository üzerinden saklar. Draft ve ClubManagement'ın kendi bounded context'lerine bu orkestrasyon sorumluluğu gömülmez.
+
+---
+
+**Doğrulanmış (E2E test edildi):** Draft ↔ ClubManagement ↔ SagaOrchestrator üçgeni, gerçek Docker altyapısı üzerinde uçtan uca test edildi (draft başlat → oyuncu claim et → Saga → roster'a doğru veriyle ekleme). Karşılaşılan ve çözülen gerçek hatalar:
+- EF Core, dışarıdan `Guid` ID verilen owned entity'lerde `Insert`'i `Update` sanabilir → `ValueGeneratedNever()` ile düzeltildi.
+- Saga state'indeki `Version`/concurrency kolonu PostgreSQL'de `.IsRowVersion()` değil `.IsConcurrencyToken()` (int tipi) ile yapılandırılmalı.
+- Domain event → integration event dönüşümünde value object alanları (örn. `PlayerSnapshot`'ın Name/Position/Overall/Age/MarketValue'su) elle map'lenirken unutulabilir — her yeni event eklerken bu mapping'in tam olduğu satır satır kontrol edilmeli.
+
+---
+
+> ⚠️ **Kritik hata notu (Match Engine kurulumu sırasında bulundu):** `ClubManagement.Infrastructure`'da
+> domain event'leri integration event'e çevirip Outbox'a yazan bir interceptor
+> (`PublishDomainEventsInterceptor` / `DbContext.SaveChangesAsync` override) **eksikti**.
+> Sonuç: `PlayerAddedToRosterEvent` hiçbir zaman yayınlanmadı, Saga bunu 30 saniyelik
+> timeout ile "başarısız" sandı ve sessizce `ReleasePlayerClaimCommand` gönderdi —
+> oysa ClubManagement DB'sinde oyuncu zaten roster'a eklenmişti. Sonuç: iki servis
+> arasında sessiz bir tutarsızlık oluştu, ama RabbitMQ kuyrukları "temiz" göründüğü
+> için önceki E2E doğrulamamız bunu **yakalayamadı**.
+>
+> **Test metodolojisi dersi:** "Kuyruklar temiz, hata yok" tek başına yeterli bir
+> E2E doğrulama değil. Saga/event-driven akışlarda **her iki tarafın (event üreten
+> ve tüketen) aynı gerçeği anlattığı** ayrıca kontrol edilmeli (örn. Draft "claimed"
+> diyorsa ClubManagement da "roster'da" demeli — ikisi arasında çapraz sorgu şart).
+> Her yeni servis için: DbContext'e domain-event-publish interceptor'ının gerçekten
+> bağlı olduğu, ilk E2E testinde zaman damgalı loglarla (timeout'a değil gerçek
+> event'e göre ilerlediği) doğrulanmalı.
+
 ## 5. Teknoloji Yığını
+
+> ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
+> 8.3+ ve 9.x sürümleri lisans anahtarı gerektiriyor (açık kaynak kullanım
+> için bile). **Tüm servislerde MassTransit paketleri `8.2.2` sürümüne
+> sabitlenmeli** (`MassTransit`, `MassTransit.RabbitMQ`, `MassTransit.EntityFrameworkCore`).
+> Ayrıca connection string'lerde `localhost` yerine `127.0.0.1` kullanılmalı
+> (Windows'ta IPv6 çözümleme sorunlarını önlemek için).
 
 | Katman | Teknoloji |
 |---|---|
