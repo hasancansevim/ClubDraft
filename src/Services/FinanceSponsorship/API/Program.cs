@@ -2,6 +2,7 @@ using ClubCraft.FinanceSponsorship.Application.Consumers;
 using ClubCraft.FinanceSponsorship.Infrastructure;
 using ClubCraft.FinanceSponsorship.Infrastructure.Persistence;
 using MassTransit;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,9 +66,10 @@ app.MapGet("/api/finances/{clubId}/offers", async (Guid clubId, ClubCraft.Financ
     return Results.Ok(offers);
 });
 
-app.MapPost("/api/finances/{clubId}/offers/{offerId}/respond", async (Guid clubId, Guid offerId, OfferResponseDto dto, ClubCraft.FinanceSponsorship.Application.Repositories.ISponsorshipOfferRepository repo, IPublishEndpoint publishEndpoint) =>
+app.MapPost("/api/finances/{clubId}/offers/{offerId}/respond", async (Guid clubId, Guid offerId, OfferResponseDto dto, ClubCraft.FinanceSponsorship.Infrastructure.Persistence.FinanceDbContext db, HttpContext httpContext) =>
 {
-    var offer = await repo.GetByIdAsync(offerId);
+    var publishEndpoint = httpContext.RequestServices.GetRequiredService<IPublishEndpoint>();
+    var offer = await db.SponsorshipOffers.FirstOrDefaultAsync(x => x.Id == offerId);
     if (offer == null || offer.ClubId != clubId) return Results.NotFound();
 
     try
@@ -79,9 +81,12 @@ app.MapPost("/api/finances/{clubId}/offers/{offerId}/respond", async (Guid clubI
         else
             return Results.BadRequest("Invalid response");
             
-        await repo.UpdateAsync(offer);
+        // Collect domain events BEFORE save (matching ClubManagement pattern)
+        var domainEvents = offer.DomainEvents.ToList();
+        offer.ClearDomainEvents();
         
-        foreach (var domainEvent in offer.DomainEvents)
+        // Publish events — queued in outbox memory
+        foreach (var domainEvent in domainEvents)
         {
             if (domainEvent is ClubCraft.FinanceSponsorship.Domain.Events.SponsorshipAcceptedEvent acceptedEvent)
             {
@@ -92,7 +97,9 @@ app.MapPost("/api/finances/{clubId}/offers/{offerId}/respond", async (Guid clubI
                 });
             }
         }
-        offer.ClearDomainEvents();
+        
+        // SaveChangesAsync flushes BOTH entity update AND outbox messages atomically
+        await db.SaveChangesAsync();
         
         return Results.Ok(offer);
     }
