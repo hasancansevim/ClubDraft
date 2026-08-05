@@ -1,4 +1,4 @@
-﻿namespace ClubCraft.Session.Infrastructure;
+namespace ClubCraft.Session.Infrastructure;
 
 public class Class1
 {

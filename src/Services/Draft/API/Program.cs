@@ -60,6 +60,7 @@ builder.Services.AddMassTransit(x =>
         o.UseBusOutbox();
     });
     x.AddConsumer<ClubCraft.Draft.API.Consumers.ReleasePlayerClaimCommandConsumer>();
+    x.AddConsumer<ClubCraft.Draft.API.Consumers.AllParticipantsReadyForDraftEventConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -68,6 +69,11 @@ builder.Services.AddMassTransit(x =>
         cfg.ReceiveEndpoint("draft-commands", e =>
         {
             e.ConfigureConsumer<ClubCraft.Draft.API.Consumers.ReleasePlayerClaimCommandConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("draft-events", e =>
+        {
+            e.ConfigureConsumer<ClubCraft.Draft.API.Consumers.AllParticipantsReadyForDraftEventConsumer>(context);
         });
 
         cfg.ConfigureEndpoints(context);

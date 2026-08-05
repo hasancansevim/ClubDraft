@@ -1,8 +1,9 @@
 using ClubCraft.BuildingBlocks.Common.SeedWork;
+using ClubCraft.BuildingBlocks.Contracts.Events;
 
 namespace ClubCraft.Draft.Domain.Events;
 
-public class DraftCompletedEvent : IDomainEvent
+public class DraftCompletedEvent : IDomainEvent, IDraftCompletedEvent
 {
     public Guid DraftSessionId { get; }
     public IEnumerable<Guid> ClubIds { get; }

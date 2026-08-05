@@ -1,4 +1,4 @@
-﻿namespace ClubCraft.Session.Domain;
+namespace ClubCraft.Session.Domain;
 
 public class Class1
 {
