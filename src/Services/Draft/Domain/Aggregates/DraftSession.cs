@@ -47,6 +47,7 @@ public class DraftSession : AggregateRoot<Guid>
         Status = DraftStatus.InProgress;
 
         AddDomainEvent(new DraftStartedEvent(Id));
+        AddDomainEvent(new DraftTurnAdvancedEvent(Id, _turnOrder[0], 0));
     }
 
     public void ClaimPlayer(Guid clubId, Guid playerId)
