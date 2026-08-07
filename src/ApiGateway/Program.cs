@@ -18,6 +18,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 
+app.UseWebSockets();
+
 // Enable YARP routing
 app.MapReverseProxy();
 

@@ -67,7 +67,7 @@
     <Project Path="src/Services/MatchEngine/Infrastructure/ClubCraft.MatchEngine.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Services/RealtimeHub/">
-    <Project Path="src/Services/RealtimeHub/ClubCraft.RealtimeHub.csproj" />
+    <Project Path="src/Services/RealtimeHub/ClubCraft.RealtimeHub.API/ClubCraft.RealtimeHub.API.csproj" />
   </Folder>
   <Folder Name="/src/Services/ReputationFan/" />
   <Folder Name="/src/Services/ReputationFan/API/">
