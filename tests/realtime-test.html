@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClubCraft — RealtimeHub E2E Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Consolas', monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; padding: 20px; }
+        h1 { color: #58a6ff; font-size: 1.4rem; margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
+        .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; height: calc(100vh - 80px); }
+        .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; overflow-y: auto; }
+        .panel h2 { color: #8b949e; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+        .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.82rem; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #6e7681; flex-shrink: 0; }
+        .dot.green { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+        .dot.red { background: #f85149; }
+        .dot.yellow { background: #d29922; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        label { font-size: 0.78rem; color: #8b949e; display: block; margin-bottom: 3px; margin-top: 10px; }
+        input, select { width: 100%; padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 5px; color: #c9d1d9; font-size: 0.82rem; font-family: monospace; }
+        input:focus, select:focus { outline: none; border-color: #58a6ff; }
+        button { width: 100%; margin-top: 8px; padding: 8px; background: #21262d; border: 1px solid #30363d; border-radius: 5px; color: #c9d1d9; font-size: 0.82rem; cursor: pointer; transition: all 0.15s; font-family: monospace; }
+        button:hover { background: #30363d; border-color: #58a6ff; }
+        button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+        button.primary:hover { background: #388bfd; }
+        button.success { background: #1a4731; border-color: #3fb950; color: #3fb950; }
+        button.success:hover { background: #238636; color: #fff; }
+        button.danger { background: #3d1f1f; border-color: #f85149; color: #f85149; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .divider { border-top: 1px solid #21262d; margin: 14px 0; }
+        #log { height: 100%; display: flex; flex-direction: column; }
+        #log h2 { flex-shrink: 0; }
+        #events { flex: 1; overflow-y: auto; font-size: 0.8rem; line-height: 1.6; }
+        .event-entry { margin-bottom: 10px; padding: 10px 12px; border-radius: 6px; border-left: 3px solid; animation: slideIn 0.2s ease; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+        .event-entry.info { background: #1c2128; border-color: #58a6ff; }
+        .event-entry.success { background: #0f2a1a; border-color: #3fb950; }
+        .event-entry.warning { background: #261d0b; border-color: #d29922; }
+        .event-entry.error { background: #2a0f0f; border-color: #f85149; }
+        .event-entry.draft { background: #1a0f2a; border-color: #bc8cff; }
+        .event-name { font-weight: bold; font-size: 0.85rem; }
+        .event-time { color: #6e7681; font-size: 0.72rem; }
+        .event-body { color: #8b949e; margin-top: 4px; white-space: pre-wrap; word-break: break-all; }
+        .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.7rem; margin-left: 6px; }
+        .badge.received { background: #1a4731; color: #3fb950; }
+        .id-display { font-size: 0.72rem; color: #6e7681; word-break: break-all; margin-top: 2px; }
+        #clear-btn { width: auto; padding: 4px 12px; margin-top: 0; float: right; }
+        .step-label { font-size: 0.72rem; color: #6e7681; margin-top: 14px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    </style>
+</head>
+<body>
+<h1>⚡ ClubCraft — RealtimeHub E2E Test Paneli</h1>
+<div class="layout">
+
+  <!-- LEFT: Control Panel -->
+  <div class="panel">
+    <h2>Bağlantı Durumu</h2>
+    <div class="status-row"><div class="dot" id="dot-session"></div><span>Session API :5006</span></div>
+    <div class="status-row"><div class="dot" id="dot-draft"></div><span>Draft API :5007</span></div>
+    <div class="status-row"><div class="dot" id="dot-hub"></div><span>RealtimeHub :5010</span></div>
+    <div class="status-row"><div class="dot" id="dot-signalr"></div><span id="signalr-status">SignalR — bağlı değil</span></div>
+
+    <div class="divider"></div>
+    <h2>Adım 1 — Oda Kur</h2>
+    <button class="primary" id="btn-create" onclick="createRoom()">POST /api/sessions → Oda Oluştur</button>
+    <label>Room ID</label>
+    <input id="room-id" readonly placeholder="Oda oluşturulunca burada görünür">
+
+    <div class="divider"></div>
+    <h2>Adım 2 — SignalR Bağlan</h2>
+    <p style="font-size:0.78rem;color:#8b949e;margin-bottom:6px;">Oda ID'si otomatik kullanılır. Bağlanmadan önce oda oluştur!</p>
+    <button class="success" id="btn-connect" onclick="connectSignalR()">SignalR'a Bağlan (roomId grubuna gir)</button>
+
+    <div class="divider"></div>
+    <h2>Adım 3 — Katılımcı Ekle</h2>
+    <p class="step-label">Host Kullanıcı</p>
+    <label>User ID (Host)</label>
+    <input id="host-user-id" readonly placeholder="Oda oluşturulunca dolar">
+    <button onclick="joinRoom('host')" id="btn-join-host">JOIN → Galatasaray (host)</button>
+    
+    <p class="step-label">İkinci Kullanıcı</p>
+    <label>User ID (2. Kullanıcı)</label>
+    <input id="user2-id" readonly placeholder="Oda oluşturulunca dolar">
+    <button onclick="joinRoom('user2')" id="btn-join-user2">JOIN → Fenerbahçe (user2)</button>
+
+    <div class="divider"></div>
+    <h2>Adım 4 — Ready & Draft</h2>
+    <p style="font-size:0.78rem;color:#8b949e;margin-bottom:6px;">İki katılımcı da join ettikten sonra her ikisini de ready işaretle.</p>
+    <button onclick="markReady('host')" id="btn-ready-host">READY → Host (Draft fazı)</button>
+    <button onclick="markReady('user2')" id="btn-ready-user2" style="margin-top:6px;">READY → User2 (Draft fazı)</button>
+
+    <div class="divider"></div>
+    <button class="danger" onclick="resetAll()">🔄 Sıfırla</button>
+  </div>
+
+  <!-- RIGHT: Event Log -->
+  <div id="log" class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0;">
+      <h2 style="margin-bottom:0;">📡 SignalR Event Log</h2>
+      <button id="clear-btn" onclick="clearLog()">Temizle</button>
+    </div>
+    <div id="events">
+      <div class="event-entry info">
+        <div class="event-name">ℹ️ Hazır</div>
+        <div class="event-body">Sol paneldeki adımları sırayla takip et. Event'ler burada otomatik görünecek.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SESSION_API = 'http://localhost:5006';
+const HUB_URL     = 'http://localhost:5010/gameHub';
+
+let connection = null;
+let roomId     = null;
+let hostUserId = null;
+let user2Id    = null;
+let p1Id       = null;  // participant DB id
+let p2Id       = null;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function log(name, payload, type = 'info') {
+  const ts  = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+  const div = document.getElementById('events');
+  const entry = document.createElement('div');
+  entry.className = `event-entry ${type}`;
+  entry.innerHTML = `
+    <div style="display:flex;justify-content:space-between;">
+      <span class="event-name">${name} <span class="badge received">RECEIVED</span></span>
+      <span class="event-time">${ts}</span>
+    </div>
+    <div class="event-body">${typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)}</div>`;
+  div.appendChild(entry);
+  div.scrollTop = div.scrollHeight;
+}
+
+function logInfo(msg) {
+  const ts = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+  const div = document.getElementById('events');
+  const entry = document.createElement('div');
+  entry.className = 'event-entry info';
+  entry.innerHTML = `<div class="event-name" style="color:#58a6ff;">${ts} &nbsp; ${msg}</div>`;
+  div.appendChild(entry);
+  div.scrollTop = div.scrollHeight;
+}
+
+function logError(msg) {
+  const div = document.getElementById('events');
+  const entry = document.createElement('div');
+  entry.className = 'event-entry error';
+  entry.innerHTML = `<div class="event-name" style="color:#f85149;">❌ HATA</div><div class="event-body">${msg}</div>`;
+  div.appendChild(entry);
+  div.scrollTop = div.scrollHeight;
+}
+
+function setDot(id, state) {
+  const el = document.getElementById(id);
+  el.className = `dot ${state}`;
+}
+
+// ── Step 1: Create Room ───────────────────────────────────────────────────────
+async function createRoom() {
+  hostUserId = crypto.randomUUID();
+  user2Id    = crypto.randomUUID();
+  document.getElementById('host-user-id').value = hostUserId;
+  document.getElementById('user2-id').value      = user2Id;
+
+  try {
+    const res = await fetch(`${SESSION_API}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostUserId, maxParticipants: 2 })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    roomId = data.id;
+    document.getElementById('room-id').value = roomId;
+    logInfo(`✅ Oda oluşturuldu → <b>${roomId}</b>`);
+    logInfo(`Şimdi "SignalR\'a Bağlan" butonuna bas!`);
+  } catch (e) {
+    logError(`createRoom: ${e.message}`);
+  }
+}
+
+// ── Step 2: Connect SignalR ───────────────────────────────────────────────────
+async function connectSignalR() {
+  if (!roomId) { logError('Önce oda oluştur!'); return; }
+  if (connection) { await connection.stop(); }
+
+  connection = new signalR.HubConnectionBuilder()
+    .withUrl(`${HUB_URL}?roomId=${roomId}&userId=${hostUserId}`)
+    .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.Warning)
+    .build();
+
+  // Register all events
+  const eventMap = {
+    'onRoomCreated':       'info',
+    'onParticipantJoined': 'success',
+    'onDraftReady':        'warning',
+    'onDraftTurnAdvanced': 'draft',
+    'onPlayerClaimed':     'success',
+    'onDraftCompleted':    'draft',
+    'onMatchResult':       'info',
+    'onWeekAdvanced':      'info',
+    'onWeekAdvanceReady':  'info',
+  };
+
+  Object.entries(eventMap).forEach(([evName, type]) => {
+    connection.on(evName, (payload) => {
+      log(`📨 ${evName}`, payload, type);
+    });
+  });
+
+  connection.onclose(() => {
+    setDot('dot-signalr', 'red');
+    document.getElementById('signalr-status').textContent = 'SignalR — bağlantı kesildi';
+    logError('SignalR bağlantısı kesildi!');
+  });
+
+  try {
+    setDot('dot-signalr', 'yellow');
+    document.getElementById('signalr-status').textContent = 'SignalR — bağlanıyor...';
+    await connection.start();
+    setDot('dot-signalr', 'green');
+    document.getElementById('signalr-status').textContent = `SignalR — BAĞLI (Room: ${roomId.substring(0, 8)}...)`;
+    logInfo(`✅ SignalR bağlandı! Room grubuna girildi: <b>${roomId}</b>`);
+    logInfo('Artık "JOIN" butonlarına basabilirsin. Event\'ler burada görünecek.');
+  } catch (e) {
+    setDot('dot-signalr', 'red');
+    logError(`SignalR bağlantı hatası: ${e.message}`);
+  }
+}
+
+// ── Step 3: Join Room ─────────────────────────────────────────────────────────
+async function joinRoom(who) {
+  if (!roomId) { logError('Önce oda oluştur ve bağlan!'); return; }
+  const userId   = who === 'host' ? hostUserId : user2Id;
+  const clubName = who === 'host' ? 'Galatasaray' : 'Fenerbahçe';
+  logInfo(`⏳ JOIN isteği gönderiliyor: <b>${clubName}</b> (${userId.substring(0,8)}...)`);
+  try {
+    const res = await fetch(`${SESSION_API}/api/sessions/${roomId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, clubName })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    logInfo(`✅ JOIN başarılı → <b>${clubName}</b>. onParticipantJoined bekleniyor...`);
+    // fetch participant DB id
+    await fetchParticipantIds();
+  } catch (e) {
+    logError(`joinRoom (${who}): ${e.message}`);
+  }
+}
+
+// ── Fetch participant IDs from API ────────────────────────────────────────────
+async function fetchParticipantIds() {
+  try {
+    const res = await fetch(`${SESSION_API}/api/sessions/${roomId}/participants`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.length > 0) p1Id = data.find(p => p.userId === hostUserId)?.id;
+      if (data.length > 1) p2Id = data.find(p => p.userId === user2Id)?.id;
+    }
+  } catch(e) { /* ignore - will be null */ }
+}
+
+// ── Step 4: Mark Ready ────────────────────────────────────────────────────────
+async function markReady(who) {
+  if (!roomId) { logError('Önce oda oluştur!'); return; }
+  // Re-fetch participant IDs if missing
+  await fetchParticipantIds();
+  
+  const participantId = who === 'host' ? p1Id : p2Id;
+  if (!participantId) {
+    logError(`${who} için participant ID bulunamadı. Önce join yap!`);
+    return;
+  }
+  logInfo(`⏳ READY isteği gönderiliyor: <b>${who}</b> (${participantId.substring(0,8)}...)`);
+  try {
+    const res = await fetch(`${SESSION_API}/api/sessions/${roomId}/ready`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantId, phase: 'Draft' })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    logInfo(`✅ READY işaretlendi → <b>${who}</b>. Eğer ikisi de ready ise onDraftReady bekleniyor...`);
+  } catch (e) {
+    logError(`markReady (${who}): ${e.message}`);
+  }
+}
+
+function clearLog() {
+  document.getElementById('events').innerHTML = '';
+}
+
+function resetAll() {
+  if (connection) connection.stop();
+  connection = null; roomId = null; hostUserId = null; user2Id = null; p1Id = null; p2Id = null;
+  ['room-id','host-user-id','user2-id'].forEach(id => document.getElementById(id).value = '');
+  setDot('dot-signalr', '');
+  document.getElementById('signalr-status').textContent = 'SignalR — bağlı değil';
+  clearLog();
+  logInfo('Sıfırlandı. Yeniden başlayabilirsin.');
+}
+
+// ── Health checks ─────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const checks = [
+    { id: 'dot-session', url: `${SESSION_API}/health` },
+    { id: 'dot-draft',   url: 'http://localhost:5007/health' },
+    { id: 'dot-hub',     url: 'http://localhost:5010/health' },
+  ];
+  for (const c of checks) {
+    try {
+      const r = await fetch(c.url, { signal: AbortSignal.timeout(2000) });
+      setDot(c.id, r.ok ? 'green' : 'red');
+    } catch {
+      setDot(c.id, 'red');
+    }
+  }
+}
+
+// Run health checks on load and every 5s
+checkHealth();
+setInterval(checkHealth, 5000);
+</script>
+</body>
+</html>

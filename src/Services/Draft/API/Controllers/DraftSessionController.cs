@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClubCraft.Draft.API.Controllers;
 
 [ApiController]
-[Route("draft-sessions")]
+[Route("api/draft-sessions")]
 public class DraftSessionController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -80,12 +80,17 @@ public class DraftSessionController : ControllerBase
         var session = await _repository.GetByIdAsync(draftSessionId);
         if (session == null) return NotFound();
 
+        var currentClubId = session.Status == ClubCraft.Draft.Domain.Enums.DraftStatus.InProgress && session.CurrentPickIndex < session.TurnOrder.Count
+            ? session.TurnOrder.ElementAt(session.CurrentPickIndex)
+            : (Guid?)null;
+
         return Ok(new
         {
             session.Id,
             session.RoomId,
             Status = session.Status.ToString(),
             session.CurrentPickIndex,
+            currentClubId,
             TurnOrder = session.TurnOrder,
             Picks = session.Picks.Select(p => new
             {

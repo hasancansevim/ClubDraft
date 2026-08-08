@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/API/">
+    <Project Path="API/ClubCraft.MatchEngine.API/ClubCraft.MatchEngine.API.csproj" />
+  </Folder>
+  <Folder Name="/Application/">
+    <Project Path="Application/ClubCraft.MatchEngine.Application.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="Domain/ClubCraft.MatchEngine.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="Infrastructure/ClubCraft.MatchEngine.Infrastructure.csproj" />
+  </Folder>
+  <Project Path="../../BuildingBlocks/Contracts/ClubCraft.BuildingBlocks.Contracts.csproj" />
+  <Project Path="ClubCraft.MatchEngine.Domain.Tests/ClubCraft.MatchEngine.Domain.Tests.csproj" />
+</Solution>

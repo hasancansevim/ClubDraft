@@ -364,18 +364,20 @@ zinciri xmin/optimistic-concurrency ile). Kalan: RealtimeHub (SignalR), API Gate
 
 ## BACKEND TAMAMLANDI (bu not itibarıyla)
 
-Dokuz servisin tamamı (Draft, ClubManagement, MatchEngine, ReputationFan,
-FinanceSponsorship, Session, SagaOrchestrator, RealtimeHub, ApiGateway)
-gerçek Docker altyapısında ve Frontend entegrasyonuyla uçtan uca senaryolarla doğrulandı:
+Sekiz servisin tamamı (Draft, ClubManagement, MatchEngine, ReputationFan,
+FinanceSponsorship, Session, SagaOrchestrator, RealtimeHub) + API Gateway (YARP),
+gerçek Docker altyapısında, sentetik olmayan uçtan uca senaryolarla doğrulandı:
 - Draft→ClubManagement Saga (concurrency, timeout, compensating action)
 - ClubManagement→MatchEngine→ReputationFan→FinanceSponsorship→ClubManagement
   event zinciri (Outbox/Inbox ile atomik ve idempotent)
 - Session→Draft otomatik tetikleme (ready-check → snake draft başlatma)
-- RealtimeHub üzerinden gerçek zamanlı SignalR event akışı (Frontend'den test edildi)
-- API Gateway (YARP) üzerinden CORS, WebSocket upgrade ve IPv6 loopback sorunları çözülerek tam iletişim sağlandı
-- Kısa oda kodu (ShortCode) üretimi Session API'ye entegre edildi
+- RealtimeHub üzerinden gerçek zamanlı SignalR event akışı
+- Tüm bunların **API Gateway (YARP) üzerinden**, WebSocket upgrade dahil, çalıştığı
 
-**Sıradaki aşama:** Frontend (React) Lobi ve Draft arayüzünün tamamlanması.
+**Sıradaki aşama: Frontend.** İlk konuşulacak konu (unutulmaması için not düşüldü):
+**oda kodu / davet linki UX'i** — şu an backend sadece ham `RoomId` (Guid)
+üretiyor, kullanıcı dostu bir paylaşım mekanizması (kısa kod, link) henüz
+tasarlanmadı.
 
 ## 6. Frontend (Karar Verildi)
 
@@ -387,12 +389,77 @@ gerçek Docker altyapısında ve Frontend entegrasyonuyla uçtan uca senaryolarl
     otomatik katılım akışına düşer.
   - Yedek yöntem: 6 haneli insan-okur kısa kod (örn. `TIGER42`).
   - **Backend'e gereken ek iş:** Session servisine, `RoomId`'nin yanında kısa
-    kod üretme/saklama eklenmeli (Yapıldı ve Entegre Edildi).
+    kod üretme/saklama eklenmeli (henüz yapılmadı).
 - **Sayfa haritası:** Ana Sayfa (kur/katıl) → Lobi (ready-check) → Draft Ekranı
   (canlı, SignalR) → Sezon Dashboard'u (fikstür/kadro/bütçe/haftalık kararlar)
   → Maç Sonuç Ekranı → Sponsorluk Bildirimi → Sezon Sonu/Skor Tablosu.
 - **İnşa sırası:** (1) proje iskeleti + routing, (2) API + SignalR entegrasyon
   katmanı (merkezi servis/hook katmanı), (3) sayfa sayfa UI, Lobi'den başlayarak.
+
+### 6.1 Görsel Tasarım Sistemi (Karar Verildi)
+
+**Stil yönü:** Modern spor dashboard'u (FIFA Ultimate Team / Football Manager esintili), kart-temelli arayüz.
+
+- **Zemin:** Çok koyu lacivert/siyah (`#0A0E17` civarı)
+- **Kart yüzeyi:** Bir ton açık (`#131826` civarı), ince border, yumuşak köşe (12-16px)
+- **Vurgu rengi:** Elektrik yeşil (`#39FF88` civarı) — pozitif aksiyon/aktif durum; kritik/uyarı için ayrı bir turuncu/kırmızı ton
+- **Metin:** Kırık beyaz ana metin, gri-mavi ikincil metin
+- **Tipografi:** Başlıklarda sportif/dar bir font (Rajdhani/Orbitron/Barlow Condensed ailesi), gövdede Inter
+- **Oyuncu/kulüp kartları:** Overall değeri büyük ve belirgin, mevki rozetleri renk kodlu (GK/DEF/MID/FWD), hover'da hafif yükselme/glow
+- **Butonlar:** Dolgun, vurgu renginde, hafif glow efekti
+
+Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) olarak kurulup, mevcut placeholder sayfalara uygulanacak.
+
+### 6.2 Frontend İlerleme Durumu (güncel)
+
+**Tamamlanan:**
+- Proje iskeleti (Vite + React + TS), routing, tasarım sistemi (§6.1) uygulandı
+- Ana Sayfa: "Oda Kur" ve "Odaya Katıl" (kısa kod), gerçek API'ye bağlı
+- API client katmanı (`src/api/sessionApi.ts`) ve SignalR hook'u (`src/hooks/useSignalR.ts`)
+- **Lobi ekranı çalışıyor:** kısa kod → gerçek RoomId çözümleme, kulüp adıyla katılma,
+  katılımcı listesi SignalR ile birden fazla tarayıcı sekmesi arasında canlı senkron
+  (gerçek iki-sekme testiyle doğrulandı)
+
+> ⚠️ **Not (Lobi kurulumunda karşılaşıldı):** "Katıl" isteği tarayıcıda 400 hatası
+> gösterdi ama katılımcı aslında eklenmişti (sayfa yenilenince görünüyordu). Kök
+> sebep netleştirilip düzeltildi. Ders: "sayfa yenileyince çalışıyor" gibi
+> belirtiler gerçek bir hatayı gizleyebilir (yanlış status code, response/state
+> tutarsızlığı gibi) — sadece "sonuçta çalışıyor" deyip geçmemeli, network
+> payload'ı ile asıl sebep görülmeli.
+
+**Sırada:**
+1. "Hazırım" butonu — tıklanınca kendi durumu ve diğer katılımcıların ekranında
+   anlık güncellenmesi; herkes hazır olunca otomatik Draft sayfasına yönlendirme
+   (`AllParticipantsReadyForDraft` → SignalR → frontend routing)
+2. Draft ekranı — sıra göstergesi, oyuncu havuzu, seçim butonu, canlı güncellemeler
+   (`onPlayerClaimed`, `onDraftTurnAdvanced`, `onPlayerClaimRejected`)
+
+> 🚨 **Ciddi regresyon notu (frontend Lobi entegrasyonunda git geçmişi taranarak
+> bulundu):** Bir önceki oturumda, RealtimeHub E2E testindeki bir zamanlama
+> (timing) sorununu "çözmek" için Session servisinde `UseBusOutbox()` bilinçli
+> olarak kaldırılmış ve Minimal API endpoint'leri Scoped `IPublishEndpoint`
+> yerine global `IBus`/`IPublishEndpoint` kullanacak şekilde değiştirilmişti —
+> yani atomiklik garantisi tamamen feda edilmişti, hem de **kritik** bir event
+> için (`AllParticipantsReadyForDraftEvent`, Draft servisini tetikleyen).
+> Bu, hiçbir E2E testte fark edilmemişti çünkü "event nihayetinde gitti"
+> (asenkron/best-effort) ile "event atomik ve garantili gitti" arasındaki farkı
+> mevcut testler ayırt etmiyordu. **Ders:** Outbox/atomiklik ile ilgili herhangi
+> bir kod her kaldırıldığında/bypass edildiğinde (commit mesajında "timing",
+> "geçici çözüm" gibi ifadeler varsa özellikle) bu mutlaka ayrıca sorgulanmalı
+> — "test geçti" tek başına yeterli kanıt değil. Şüpheli bir davranış
+> görüldüğünde `git log -S` ile arama, kök sebebi bulmakta çok etkili oldu.
+
+> 📌 **Bilinen teknik borç (frontend Draft entegrasyonunda tespit edildi):**
+> Draft servisi şu an `TurnOrder`/`ClubId` olarak Session'ın ürettiği ham
+> `ParticipantId`'yi kullanıyor — `ClubManagement`'ın gerçek `Club.ClubId`'si
+> hiç devreye girmiyor (Lobi'de katılırken ClubManagement'a `InitializeClub`
+> çağrısı yapılmıyor). Bu, frontend'i çalışır kılmak için bilinçli olarak
+> şimdilik kabul edilen bir kısayol. **Sonuç:** Draft'ta seçilen oyuncular
+> şu anki haliyle gerçek bir `Club` aggregate'ine bağlanamaz — Saga
+> (`AddPlayerToRosterCommand`) böyle bir `ClubId` bulamayıp timeout'a düşer.
+> **Yapılacak (frontend akışı bittikten sonra):** Lobi'de "Katıl" akışına
+> ClubManagement'ın `InitializeClub` çağrısını ekleyip, dönen gerçek `ClubId`'yi
+> Session'a/Draft'a taşıyan bir düzeltme turu planlanmalı.
 
 ## 5. Teknoloji Yığını
 
