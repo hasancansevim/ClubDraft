@@ -74,7 +74,7 @@ app.MapPost("/api/sessions", async (CreateSessionRequest request, SessionDbConte
         }
     }
 
-    return Results.Ok(new { gameRoom.Id });
+    return Results.Ok(new { gameRoom.Id, gameRoom.ShortCode });
 });
 
 app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest request, SessionDbContext dbContext, IBus bus) =>
@@ -84,7 +84,7 @@ app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest r
 
     try
     {
-        gameRoom.Join(request.UserId, request.ClubName);
+        var participantId = gameRoom.Join(request.UserId, request.ClubName);
         var domainEvents = gameRoom.DomainEvents.ToList();
         gameRoom.ClearDomainEvents();
 
@@ -116,7 +116,7 @@ app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest r
             }
         }
 
-        return Results.Ok();
+        return Results.Ok(new { participantId });
     }
     catch (InvalidOperationException ex)
     {
@@ -137,6 +137,21 @@ app.MapGet("/api/sessions/{id:guid}/participants", async (Guid id, SessionDbCont
     var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.Id == id);
     if (gameRoom is null) return Results.NotFound();
     return Results.Ok(gameRoom.Participants.Select(p => new { p.Id, p.UserId, p.ClubName, p.IsReady }));
+});
+
+// GET /api/sessions/{id:guid}
+app.MapGet("/api/sessions/{id:guid}", async (Guid id, SessionDbContext dbContext) =>
+{
+    var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.Id == id);
+    if (gameRoom is null) return Results.NotFound();
+    return Results.Ok(new { gameRoom.Id, gameRoom.ShortCode, gameRoom.Status, gameRoom.CurrentWeek, gameRoom.Participants });
+});
+
+app.MapGet("/api/sessions/by-code/{shortCode}", async (string shortCode, SessionDbContext dbContext) =>
+{
+    var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.ShortCode == shortCode.ToUpper());
+    if (gameRoom is null) return Results.NotFound();
+    return Results.Ok(new { gameRoom.Id, gameRoom.ShortCode, gameRoom.Status, gameRoom.CurrentWeek });
 });
 
 app.MapPost("/api/sessions/{id:guid}/ready", async (Guid id, ReadySessionRequest request, SessionDbContext dbContext, IPublishEndpoint publishEndpoint) =>

@@ -364,20 +364,35 @@ zinciri xmin/optimistic-concurrency ile). Kalan: RealtimeHub (SignalR), API Gate
 
 ## BACKEND TAMAMLANDI (bu not itibarıyla)
 
-Sekiz servisin tamamı (Draft, ClubManagement, MatchEngine, ReputationFan,
-FinanceSponsorship, Session, SagaOrchestrator, RealtimeHub) + API Gateway (YARP),
-gerçek Docker altyapısında, sentetik olmayan uçtan uca senaryolarla doğrulandı:
+Dokuz servisin tamamı (Draft, ClubManagement, MatchEngine, ReputationFan,
+FinanceSponsorship, Session, SagaOrchestrator, RealtimeHub, ApiGateway)
+gerçek Docker altyapısında ve Frontend entegrasyonuyla uçtan uca senaryolarla doğrulandı:
 - Draft→ClubManagement Saga (concurrency, timeout, compensating action)
 - ClubManagement→MatchEngine→ReputationFan→FinanceSponsorship→ClubManagement
   event zinciri (Outbox/Inbox ile atomik ve idempotent)
 - Session→Draft otomatik tetikleme (ready-check → snake draft başlatma)
-- RealtimeHub üzerinden gerçek zamanlı SignalR event akışı
-- Tüm bunların **API Gateway (YARP) üzerinden**, WebSocket upgrade dahil, çalıştığı
+- RealtimeHub üzerinden gerçek zamanlı SignalR event akışı (Frontend'den test edildi)
+- API Gateway (YARP) üzerinden CORS, WebSocket upgrade ve IPv6 loopback sorunları çözülerek tam iletişim sağlandı
+- Kısa oda kodu (ShortCode) üretimi Session API'ye entegre edildi
 
-**Sıradaki aşama: Frontend.** İlk konuşulacak konu (unutulmaması için not düşüldü):
-**oda kodu / davet linki UX'i** — şu an backend sadece ham `RoomId` (Guid)
-üretiyor, kullanıcı dostu bir paylaşım mekanizması (kısa kod, link) henüz
-tasarlanmadı.
+**Sıradaki aşama:** Frontend (React) Lobi ve Draft arayüzünün tamamlanması.
+
+## 6. Frontend (Karar Verildi)
+
+- **Framework:** React (Angular deneyimi göz önüne alınarak değerlendirildi, ama
+  veri-odaklı ekran ağırlığı, geniş ekosistem ve "backend .NET + frontend React"
+  piyasa eşleşmesi nedeniyle React seçildi).
+- **Oda Katılım UX'i:** Link + kısa kod ikisi birden.
+  - Ana yöntem: paylaşılabilir link (`clubcraft.app/join/{roomId}`), tıklanınca
+    otomatik katılım akışına düşer.
+  - Yedek yöntem: 6 haneli insan-okur kısa kod (örn. `TIGER42`).
+  - **Backend'e gereken ek iş:** Session servisine, `RoomId`'nin yanında kısa
+    kod üretme/saklama eklenmeli (Yapıldı ve Entegre Edildi).
+- **Sayfa haritası:** Ana Sayfa (kur/katıl) → Lobi (ready-check) → Draft Ekranı
+  (canlı, SignalR) → Sezon Dashboard'u (fikstür/kadro/bütçe/haftalık kararlar)
+  → Maç Sonuç Ekranı → Sponsorluk Bildirimi → Sezon Sonu/Skor Tablosu.
+- **İnşa sırası:** (1) proje iskeleti + routing, (2) API + SignalR entegrasyon
+  katmanı (merkezi servis/hook katmanı), (3) sayfa sayfa UI, Lobi'den başlayarak.
 
 ## 5. Teknoloji Yığını
 
@@ -424,7 +439,7 @@ Projenin CV/mimari odağını korumak için şu karmaşıklıklar bilinçli olar
 - [x] Draft sırası algoritması — **Snake Draft**, bkz. §4.5
 - [x] Endpoint taslakları (Request/Response) — bkz. §4.8
 - [x] Saga senaryosu netleşti (Draft Pick koordinasyonu) — bkz. §4.7
-- [ ] Frontend framework kesin kararı (React vs Angular) — backend tamamlanınca
+- [x] Frontend framework kesin kararı (React vs Angular) — backend tamamlanınca
 - [ ] CI/CD ve deployment stratejisi
 - [ ] Player pool'un nereden geleceği (statik seed data mı, JSON dosyası mı, admin panel mi)
 - [ ] Kadro limiti (roster cap) — kaç oyuncuya kadar draft yapılabilir
