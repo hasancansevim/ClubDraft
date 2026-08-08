@@ -29,3 +29,10 @@ public interface IWeeklyDecisionMadeEvent
     int Type { get; } // Enum as int
     decimal Cost { get; }
 }
+
+public interface IClubInitializedEvent
+{
+    Guid ParticipantId { get; }
+    Guid ClubId { get; }
+    Guid RoomId { get; }
+}

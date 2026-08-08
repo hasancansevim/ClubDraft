@@ -8,6 +8,7 @@ namespace ClubCraft.Session.Domain.Aggregates
         public string UserId { get; private set; }
         public string ClubName { get; private set; }
         public bool IsReady { get; set; }
+        public Guid? ClubId { get; private set; }
 
         private Participant() { }
 
@@ -17,6 +18,11 @@ namespace ClubCraft.Session.Domain.Aggregates
             UserId = userId;
             ClubName = clubName;
             IsReady = false;
+        }
+
+        public void AssignClub(Guid clubId)
+        {
+            ClubId = clubId;
         }
     }
 }

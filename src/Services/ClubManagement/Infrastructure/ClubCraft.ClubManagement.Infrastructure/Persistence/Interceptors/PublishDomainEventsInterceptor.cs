@@ -48,6 +48,14 @@ public class PublishDomainEventsInterceptor : SaveChangesInterceptor
     {
         switch (domainEvent)
         {
+            case ClubInitializedEvent e:
+                await _publishEndpoint.Publish<IClubInitializedEvent>(new
+                {
+                    ParticipantId = e.ParticipantId,
+                    ClubId = e.ClubId,
+                    RoomId = e.RoomId
+                }, cancellationToken);
+                break;
             case PlayerAddedToRosterEvent e:
                 await _publishEndpoint.Publish<IPlayerAddedToRosterEvent>(new
                 {

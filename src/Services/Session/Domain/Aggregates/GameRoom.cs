@@ -70,6 +70,12 @@ namespace ClubCraft.Session.Domain.Aggregates
             if (participant == null)
                 throw new InvalidOperationException("Participant not found");
 
+            if (phase == "Draft" && !participant.ClubId.HasValue)
+            {
+                // Silently return or we could emit an event. For now, silent return as requested (idempotent/safe).
+                return;
+            }
+
             participant.IsReady = true;
             
             AddDomainEvent(new ParticipantReadyEvent(Id, participantId, phase));
@@ -78,7 +84,7 @@ namespace ClubCraft.Session.Domain.Aggregates
             {
                 if (phase == "Draft")
                 {
-                    AddDomainEvent(new AllParticipantsReadyForDraftEvent(Id, _participants.Select(p => p.Id)));
+                    AddDomainEvent(new AllParticipantsReadyForDraftEvent(Id, _participants.Select(p => p.ClubId!.Value)));
                     AdvanceToDraft();
                 }
                 else if (phase == "WeekAdvance")

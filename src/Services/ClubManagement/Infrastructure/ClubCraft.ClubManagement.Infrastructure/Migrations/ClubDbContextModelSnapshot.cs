@@ -32,6 +32,9 @@ namespace ClubCraft.ClubManagement.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("PresidentUserId")
                         .HasColumnType("uuid");
 
@@ -235,7 +238,6 @@ namespace ClubCraft.ClubManagement.Infrastructure.Migrations
                     b.OwnsMany("ClubCraft.ClubManagement.Domain.Entities.Player", "Roster", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
                             b1.Property<int>("Age")
@@ -271,7 +273,6 @@ namespace ClubCraft.ClubManagement.Infrastructure.Migrations
                     b.OwnsMany("ClubCraft.ClubManagement.Domain.Entities.WeeklyDecision", "WeeklyDecisions", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
                             b1.Property<Guid>("ClubId")

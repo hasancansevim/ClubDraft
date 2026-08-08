@@ -24,6 +24,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<AddPlayerToRosterCommandConsumer>();
     x.AddConsumer<ReleasePlayerFromRosterCommandConsumer>();
     x.AddConsumer<ClubCraft.ClubManagement.Application.Consumers.SponsorshipAcceptedEventConsumer>();
+    x.AddConsumer<ClubCraft.ClubManagement.Application.Consumers.ParticipantJoinedEventConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -43,6 +44,7 @@ builder.Services.AddMassTransit(x =>
         {
             e.UseEntityFrameworkOutbox<ClubCraft.ClubManagement.Infrastructure.Persistence.ClubDbContext>(context);
             e.ConfigureConsumer<ClubCraft.ClubManagement.Application.Consumers.SponsorshipAcceptedEventConsumer>(context);
+            e.ConfigureConsumer<ClubCraft.ClubManagement.Application.Consumers.ParticipantJoinedEventConsumer>(context);
         });
 
         cfg.ConfigureEndpoints(context);

@@ -27,6 +27,14 @@ public class ClubRepository : IClubRepository
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
+    public async Task<Club?> GetByParticipantIdAsync(Guid participantId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Clubs
+            .Include(c => c.Roster)
+            .Include(c => c.WeeklyDecisions)
+            .FirstOrDefaultAsync(x => x.ParticipantId == participantId, cancellationToken);
+    }
+
     public async Task SaveAsync(Club club, CancellationToken cancellationToken = default)
     {
         var entry = _dbContext.Entry(club);
@@ -50,6 +58,14 @@ public class ClubRepository : IClubRepository
     {
         switch (domainEvent)
         {
+            case ClubInitializedEvent e:
+                await _publishEndpoint.Publish<IClubInitializedEvent>(new
+                {
+                    ParticipantId = e.ParticipantId,
+                    ClubId = e.ClubId,
+                    RoomId = e.RoomId
+                }, cancellationToken);
+                break;
             case PlayerAddedToRosterEvent e:
                 await _publishEndpoint.Publish<IPlayerAddedToRosterEvent>(new
                 {

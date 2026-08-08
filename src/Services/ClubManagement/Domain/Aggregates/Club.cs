@@ -9,6 +9,7 @@ namespace ClubCraft.ClubManagement.Domain.Aggregates;
 public class Club : AggregateRoot<Guid>
 {
     public Guid RoomId { get; private set; }
+    public Guid ParticipantId { get; private set; }
     public Guid PresidentUserId { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public Money Budget { get; private set; } = Money.Zero;
@@ -24,15 +25,16 @@ public class Club : AggregateRoot<Guid>
 
     private Club() { } // EF Core
 
-    public Club(Guid id, Guid roomId, Guid presidentUserId, string name, decimal initialBudget)
+    public Club(Guid id, Guid roomId, Guid presidentUserId, string name, decimal initialBudget, Guid participantId)
     {
         Id = id;
         RoomId = roomId;
         PresidentUserId = presidentUserId;
         Name = name;
+        ParticipantId = participantId;
         Budget = new Money(initialBudget);
 
-        AddDomainEvent(new ClubInitializedEvent(Id, RoomId, PresidentUserId, Name, initialBudget));
+        AddDomainEvent(new ClubInitializedEvent(Id, RoomId, PresidentUserId, Name, initialBudget, ParticipantId));
     }
 
     public void AddPlayerToRoster(Guid playerId, string name, string position, int overall, int age, decimal marketValue, Guid pickAttemptId)

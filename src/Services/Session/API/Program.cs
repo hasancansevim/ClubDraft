@@ -28,6 +28,7 @@ builder.Services.AddMassTransit(x =>
 
     x.AddConsumer<DraftCompletedEventConsumer>();
     x.AddConsumer<WeekSimulationCompletedEventConsumer>();
+    x.AddConsumer<ClubInitializedEventConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -38,6 +39,11 @@ builder.Services.AddMassTransit(x =>
             e.UseEntityFrameworkOutbox<SessionDbContext>(context);
             e.ConfigureConsumer<DraftCompletedEventConsumer>(context);
             e.ConfigureConsumer<WeekSimulationCompletedEventConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("club-management-events", e =>
+        {
+            e.ConfigureConsumer<ClubInitializedEventConsumer>(context);
         });
     });
 });
@@ -134,7 +140,7 @@ app.MapGet("/api/sessions/{id:guid}/participants", async (Guid id, SessionDbCont
 {
     var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.Id == id);
     if (gameRoom is null) return Results.NotFound();
-    return Results.Ok(gameRoom.Participants.Select(p => new { p.Id, p.UserId, p.ClubName, p.IsReady }));
+    return Results.Ok(gameRoom.Participants.Select(p => new { p.Id, p.UserId, p.ClubName, p.IsReady, p.ClubId }));
 });
 
 // GET /api/sessions/{id:guid}

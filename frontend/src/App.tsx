@@ -160,7 +160,18 @@ const Lobby = () => {
       }
     };
     fetchRoom();
-  }, [shortCode]);
+    
+    // Auto-poll to fetch ClubId if it's missing for myself
+    const interval = setInterval(() => {
+        if (realRoomId) {
+            sessionApi.getRoom(realRoomId).then(fullRoom => {
+                setParticipants(fullRoom.participants || []);
+            }).catch(console.error);
+        }
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [shortCode, realRoomId]);
 
   // 2. RealRoomId çözüldükten sonra SignalR'a bağlan
   const { isConnected } = useSignalR({
@@ -173,7 +184,8 @@ const Lobby = () => {
           id: data.participantId,
           userId: data.userId,
           clubName: data.clubName,
-          isReady: false
+          isReady: false,
+          clubId: data.clubId // SignalR update should ideally include it, but polling will fix it.
         };
         return prev.some(p => p.id === newP.id)
           ? prev.map(p => p.id === newP.id ? newP : p)
@@ -255,9 +267,9 @@ const Lobby = () => {
           <button 
             className="cc-btn" 
             onClick={handleReady}
-            disabled={participants.find(p => p.id === myParticipantId)?.isReady}
+            disabled={participants.find(p => p.id === myParticipantId)?.isReady || !participants.find(p => p.id === myParticipantId)?.clubId}
           >
-            {participants.find(p => p.id === myParticipantId)?.isReady ? 'Hazırsın ✓' : 'Hazırım!'}
+            {participants.find(p => p.id === myParticipantId)?.isReady ? 'Hazırsın ✓' : (!participants.find(p => p.id === myParticipantId)?.clubId ? 'Kulüp Kuruluyor...' : 'Hazırım!')}
           </button>
         </div>
       )}
@@ -303,6 +315,7 @@ const Draft = () => {
   // We can fetch realRoomId from shortCode
   const [realRoomId, setRealRoomId] = useState<string>('');
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
+  const [myClubId, setMyClubId] = useState<string | null>(null);
   
   useEffect(() => {
     const init = async () => {
@@ -314,8 +327,15 @@ const Draft = () => {
         const room = await sessionApi.getRoomByCode(shortCode);
         if (room && room.id) {
           setRealRoomId(room.id);
-          // Draft Session ID is same as Room ID in this domain design
           setDraftSessionId(room.id);
+          
+          const fullRoom = await sessionApi.getRoom(room.id);
+          if (fullRoom && fullRoom.participants) {
+              const myP = fullRoom.participants.find(p => p.id === participantId);
+              if (myP && myP.clubId) {
+                  setMyClubId(myP.clubId);
+              }
+          }
           
           const poolData = await draftApi.getPool(room.id);
           setPool(poolData || []);
@@ -355,9 +375,9 @@ const Draft = () => {
   });
 
   const handleClaim = async (playerId: string) => {
-    if (!draftSessionId || !myParticipantId) return;
+    if (!draftSessionId || !myClubId) return;
     try {
-      await draftApi.claimPlayer(draftSessionId, myParticipantId, playerId);
+      await draftApi.claimPlayer(draftSessionId, myClubId, playerId);
       
       // Update local state for immediate feedback
       setPool(prev => prev.map(p => 
@@ -379,7 +399,7 @@ const Draft = () => {
         <h2>Draft Odası</h2>
         <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>
           Sıra: <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>
-            {draftState?.currentClubId === myParticipantId ? 'Sende!' : (draftState?.currentClubId ? 'Bekleniyor...' : 'Bilinmiyor')}
+            {draftState?.currentClubId === myClubId ? 'Sende!' : (draftState?.currentClubId ? 'Bekleniyor...' : 'Bilinmiyor')}
           </span>
         </p>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
@@ -408,13 +428,13 @@ const Draft = () => {
             <button 
               className="cc-btn" 
               onClick={() => handleClaim(player.playerId)}
-              disabled={player.isClaimed || draftState?.currentClubId !== myParticipantId}
+              disabled={player.isClaimed || draftState?.currentClubId !== myClubId}
               style={{ 
                 width: '100%', 
                 padding: '0.5rem',
-                backgroundColor: player.isClaimed ? 'rgba(255,255,255,0.1)' : (draftState?.currentClubId !== myParticipantId ? 'rgba(255,255,255,0.05)' : 'var(--accent)'),
-                color: player.isClaimed || draftState?.currentClubId !== myParticipantId ? 'var(--text-secondary)' : '#000',
-                cursor: player.isClaimed || draftState?.currentClubId !== myParticipantId ? 'not-allowed' : 'pointer'
+                backgroundColor: player.isClaimed ? 'rgba(255,255,255,0.1)' : (draftState?.currentClubId !== myClubId ? 'rgba(255,255,255,0.05)' : 'var(--accent)'),
+                color: player.isClaimed || draftState?.currentClubId !== myClubId ? 'var(--text-secondary)' : '#000',
+                cursor: player.isClaimed || draftState?.currentClubId !== myClubId ? 'not-allowed' : 'pointer'
               }}
             >
               {player.isClaimed ? 'Seçildi' : 'Seç'}

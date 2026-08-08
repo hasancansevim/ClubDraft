@@ -11,6 +11,7 @@ export interface Participant {
   userId: string;
   clubName: string;
   isReady: boolean;
+  clubId?: string;
 }
 
 export interface GameRoom {
