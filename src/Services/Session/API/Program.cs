@@ -23,8 +23,7 @@ builder.Services.AddMassTransit(x =>
     x.AddEntityFrameworkOutbox<SessionDbContext>(o =>
     {
         o.UsePostgres();
-        // Not: UseBusOutbox() kaldırıldı — realtime event'ler IBus ile direkt yayınlanıyor
-        // Outbox sadece consumer inbox deduplication için kullanılıyor
+        o.UseBusOutbox();
     });
 
     x.AddConsumer<DraftCompletedEventConsumer>();
@@ -53,20 +52,19 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // Minimal APIs
-app.MapPost("/api/sessions", async (CreateSessionRequest request, SessionDbContext dbContext, IBus bus) =>
+app.MapPost("/api/sessions", async (CreateSessionRequest request, SessionDbContext dbContext, HttpContext httpContext) =>
 {
+    var publishEndpoint = httpContext.RequestServices.GetRequiredService<IPublishEndpoint>();
     var gameRoom = GameRoom.Create(request.HostUserId, request.MaxParticipants);
     dbContext.GameRooms.Add(gameRoom);
-    await dbContext.SaveChangesAsync();
     
-    // IBus ile direkt publish (outbox bypass) — realtime event, idempotency gerekmez
     var domainEvents = gameRoom.DomainEvents.ToList();
     gameRoom.ClearDomainEvents();
     foreach (var domainEvent in domainEvents)
     {
         if (domainEvent is ClubCraft.Session.Domain.Events.RoomCreatedEvent roomCreated)
         {
-            await bus.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IRoomCreatedEvent>(new
+            await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IRoomCreatedEvent>(new
             {
                 RoomId = roomCreated.RoomId,
                 HostUserId = roomCreated.HostUserId
@@ -74,11 +72,13 @@ app.MapPost("/api/sessions", async (CreateSessionRequest request, SessionDbConte
         }
     }
 
+    await dbContext.SaveChangesAsync();
     return Results.Ok(new { gameRoom.Id, gameRoom.ShortCode });
 });
 
-app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest request, SessionDbContext dbContext, IBus bus) =>
+app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest request, SessionDbContext dbContext, HttpContext httpContext) =>
 {
+    var publishEndpoint = httpContext.RequestServices.GetRequiredService<IPublishEndpoint>();
     var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.Id == id);
     if (gameRoom is null) return Results.NotFound();
 
@@ -88,10 +88,6 @@ app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest r
         var domainEvents = gameRoom.DomainEvents.ToList();
         gameRoom.ClearDomainEvents();
 
-        await dbContext.SaveChangesAsync();
-        Console.WriteLine($"[JOIN] SaveChanges OK. Publishing {domainEvents.Count} domain events...");
-
-        // IBus ile direkt publish (outbox bypass) — SaveChanges sonrası, kayıt güvende
         foreach (var domainEvent in domainEvents)
         {
             if (domainEvent is ClubCraft.Session.Domain.Events.ParticipantJoinedEvent joinedEvent)
@@ -99,7 +95,7 @@ app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest r
                 try
                 {
                     Console.WriteLine($"[JOIN] Publishing IParticipantJoinedEvent for RoomId={joinedEvent.RoomId}");
-                    await bus.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IParticipantJoinedEvent>(new
+                    await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IParticipantJoinedEvent>(new
                     {
                         RoomId = joinedEvent.RoomId,
                         ParticipantId = joinedEvent.ParticipantId,
@@ -116,6 +112,8 @@ app.MapPost("/api/sessions/{id:guid}/join", async (Guid id, JoinSessionRequest r
             }
         }
 
+        await dbContext.SaveChangesAsync();
+        Console.WriteLine($"[JOIN] SaveChanges OK.");
         return Results.Ok(new { participantId });
     }
     catch (InvalidOperationException ex)
@@ -154,45 +152,72 @@ app.MapGet("/api/sessions/by-code/{shortCode}", async (string shortCode, Session
     return Results.Ok(new { gameRoom.Id, gameRoom.ShortCode, gameRoom.Status, gameRoom.CurrentWeek });
 });
 
-app.MapPost("/api/sessions/{id:guid}/ready", async (Guid id, ReadySessionRequest request, SessionDbContext dbContext, IPublishEndpoint publishEndpoint) =>
+app.MapPost("/api/sessions/{id:guid}/ready", async (Guid id, ReadySessionRequest request, SessionDbContext dbContext, HttpContext httpContext) =>
 {
-    var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.Id == id);
-    if (gameRoom is null) return Results.NotFound();
-
-    try
+    var publishEndpoint = httpContext.RequestServices.GetRequiredService<IPublishEndpoint>();
+    
+    int maxRetries = 3;
+    for (int attempt = 1; attempt <= maxRetries; attempt++)
     {
-        gameRoom.MarkReady(request.ParticipantId, request.Phase);
-        
-        var domainEvents = gameRoom.DomainEvents.ToList();
-        gameRoom.ClearDomainEvents();
+        var gameRoom = await dbContext.GameRooms.Include(g => g.Participants).FirstOrDefaultAsync(g => g.Id == id);
+        if (gameRoom is null) return Results.NotFound();
 
-        foreach (var domainEvent in domainEvents)
+        try
         {
-            if (domainEvent is ClubCraft.Session.Domain.Events.AllParticipantsReadyForDraftEvent draftReadyEvent)
-            {
-                await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IAllParticipantsReadyForDraftEvent>(new
-                {
-                    RoomId = draftReadyEvent.RoomId,
-                    ParticipantClubIds = draftReadyEvent.ParticipantClubIds
-                });
-            }
-            else if (domainEvent is ClubCraft.Session.Domain.Events.AllParticipantsReadyForNextWeekEvent nextWeekEvent)
-            {
-                await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IAllParticipantsReadyForNextWeekEvent>(new
-                {
-                    RoomId = nextWeekEvent.RoomId,
-                    Week = nextWeekEvent.Week
-                });
-            }
-        }
+            gameRoom.MarkReady(request.ParticipantId, request.Phase);
+            
+            var domainEvents = gameRoom.DomainEvents.ToList();
+            gameRoom.ClearDomainEvents();
 
-        await dbContext.SaveChangesAsync();
-        return Results.Ok();
+            foreach (var domainEvent in domainEvents)
+            {
+                if (domainEvent is ClubCraft.Session.Domain.Events.ParticipantReadyEvent readyEvent)
+                {
+                    await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IParticipantReadyEvent>(new
+                    {
+                        RoomId = readyEvent.RoomId,
+                        ParticipantId = readyEvent.ParticipantId,
+                        Phase = readyEvent.Phase
+                    });
+                }
+                else if (domainEvent is ClubCraft.Session.Domain.Events.AllParticipantsReadyForDraftEvent draftReadyEvent)
+                {
+                    await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IAllParticipantsReadyForDraftEvent>(new
+                    {
+                        RoomId = draftReadyEvent.RoomId,
+                        ParticipantClubIds = draftReadyEvent.ParticipantClubIds.ToArray()
+                    });
+                }
+                else if (domainEvent is ClubCraft.Session.Domain.Events.AllParticipantsReadyForNextWeekEvent nextWeekEvent)
+                {
+                    await publishEndpoint.Publish<ClubCraft.BuildingBlocks.Contracts.Events.IAllParticipantsReadyForNextWeekEvent>(new
+                    {
+                        RoomId = nextWeekEvent.RoomId,
+                        Week = nextWeekEvent.Week
+                    });
+                }
+            }
+
+            await dbContext.SaveChangesAsync();
+            return Results.Ok();
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            if (attempt == maxRetries)
+                return Results.Problem("Concurrency error: Too many participants marking ready at the same time. Please try again.");
+            
+            // Wait a little before retry
+            await Task.Delay(100 * attempt);
+            // Clear change tracker so we reload fresh on next attempt
+            dbContext.ChangeTracker.Clear();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
     }
-    catch (InvalidOperationException ex)
-    {
-        return Results.BadRequest(new { error = ex.Message });
-    }
+    
+    return Results.Problem("Failed to mark ready after retries.");
 });
 
 app.MapPost("/api/sessions/{id:guid}/advance-to-draft", async (Guid id, SessionDbContext dbContext) =>
