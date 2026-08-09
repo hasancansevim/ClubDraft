@@ -306,17 +306,77 @@ const Draft = () => {
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false); // To prevent concurrent clicks
   
-  // Odanın gerçek kimliğini almak ve MyUserId vb. state yönetimi (Basit mock)
+  // States for Filtering & Pagination
+  const [searchQuery, setSearchQuery] = useState('');
+  const [positionFilter, setPositionFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('OVERALL_DESC');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 24;
+  const MAX_ROSTER_SIZE = 20;
+  
+  // User & Room states
   const [myUserId] = useState(() => localStorage.getItem('myUserId') || crypto.randomUUID());
   useEffect(() => localStorage.setItem('myUserId', myUserId), [myUserId]);
   
-  // RealRoomId and MyClubId mock for now (in real app, use Context or Redux)
-  // We can fetch realRoomId from shortCode
   const [realRoomId, setRealRoomId] = useState<string>('');
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
   const [myClubId, setMyClubId] = useState<string | null>(null);
-  
+
+  // Lineup & Drag-Drop States
+  const [lineup, setLineup] = useState<Record<string, string | null>>({});
+  const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
+
+  const FORMATION_SLOTS = [
+    { id: 'ST1', label: 'ST', top: '20%', left: '35%' },
+    { id: 'ST2', label: 'ST', top: '20%', left: '65%' },
+    { id: 'LM', label: 'LM', top: '45%', left: '20%' },
+    { id: 'CM1', label: 'CM', top: '48%', left: '40%' },
+    { id: 'CM2', label: 'CM', top: '48%', left: '60%' },
+    { id: 'RM', label: 'RM', top: '45%', left: '80%' },
+    { id: 'LB', label: 'LB', top: '72%', left: '20%' },
+    { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
+    { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
+    { id: 'RB', label: 'RB', top: '72%', left: '80%' },
+    { id: 'GK', label: 'GK', top: '90%', left: '50%' },
+  ];
+
+  const handleDragStart = (e: React.DragEvent, playerId: string) => {
+    e.dataTransfer.setData('playerId', playerId);
+    setDraggedPlayerId(playerId);
+  };
+
+  const handleDropToSlot = (e: React.DragEvent, slotId: string) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const playerId = e.dataTransfer.getData('playerId');
+    if (!playerId || !draftSessionId) return;
+    
+    setLineup(prev => {
+        const newLineup = { ...prev };
+        Object.keys(newLineup).forEach(k => { if (newLineup[k] === playerId) newLineup[k] = null; });
+        newLineup[slotId] = playerId;
+        localStorage.setItem(`draft_lineup_${draftSessionId}`, JSON.stringify(newLineup));
+        return newLineup;
+    });
+    setDraggedPlayerId(null);
+  };
+
+  const handleDropToBench = (e: React.DragEvent) => {
+    e.preventDefault();
+    const playerId = e.dataTransfer.getData('playerId');
+    if (!playerId || !draftSessionId) return;
+    
+    setLineup(prev => {
+        const newLineup = { ...prev };
+        Object.keys(newLineup).forEach(k => { if (newLineup[k] === playerId) newLineup[k] = null; });
+        localStorage.setItem(`draft_lineup_${draftSessionId}`, JSON.stringify(newLineup));
+        return newLineup;
+    });
+    setDraggedPlayerId(null);
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -342,6 +402,10 @@ const Draft = () => {
           
           const stateData = await draftApi.getState(room.id);
           setDraftState(stateData);
+          
+          const savedLineup = localStorage.getItem(`draft_lineup_${room.id}`);
+          if (savedLineup) setLineup(JSON.parse(savedLineup));
+          
         } else {
           setError('Oda bulunamadı.');
         }
@@ -371,76 +435,378 @@ const Draft = () => {
       setPool(prev => prev.map(p => 
         p.playerId === data.playerId ? { ...p, isClaimed: true } : p
       ));
+      
+      // Add the pick to draftState so the roster updates instantly
+      setDraftState(prev => {
+        if (!prev) return prev;
+        
+        // Prevent adding duplicate pick if already exists
+        if (prev.picks?.some(p => p.playerId === data.playerId)) {
+            return prev;
+        }
+
+        const newPick = {
+          pickNumber: data.pickNumber,
+          clubId: data.clubId,
+          playerId: data.playerId,
+          claimedAt: data.occurredOn || new Date().toISOString()
+        };
+        return {
+          ...prev,
+          picks: [...(prev.picks || []), newPick]
+        };
+      });
     }
   });
 
   const handleClaim = async (playerId: string) => {
-    if (!draftSessionId || !myClubId) return;
+    if (!draftSessionId || !myClubId || isClaiming || rosterCount >= MAX_ROSTER_SIZE) return;
+    
+    setIsClaiming(true);
     try {
       await draftApi.claimPlayer(draftSessionId, myClubId, playerId);
-      
-      // Update local state for immediate feedback
-      setPool(prev => prev.map(p => 
-        p.playerId === playerId ? { ...p, isClaimed: true } : p
-      ));
+      // We rely on SignalR `onPlayerClaimed` to update state to ensure consistency across clients.
     } catch (err: any) {
       console.error(err);
       const reason = err.response?.data?.reason || 'Bilinmeyen hata';
       alert(`Oyuncu seçilemedi: ${reason}`);
+    } finally {
+      // Small delay to allow SignalR event to arrive before unlocking buttons
+      setTimeout(() => setIsClaiming(false), 300);
     }
   };
+  
+  // Calculate Roster
+  const myPicks = draftState?.picks?.filter(p => p.clubId === myClubId) || [];
+  const rosterCount = myPicks.length;
+  
+  // Filtering & Sorting Logic
+  const getFilteredAndSortedPool = () => {
+    let filtered = pool;
+    
+    if (searchQuery.trim() !== '') {
+      filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    
+    if (positionFilter !== 'ALL') {
+      filtered = filtered.filter(p => p.position === positionFilter);
+    }
+    
+    // Create a copy of the array before sorting
+    filtered = [...filtered];
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'OVERALL_DESC': return b.overall - a.overall;
+        case 'OVERALL_ASC': return a.overall - b.overall;
+        case 'AGE_ASC': return a.age - b.age;
+        case 'AGE_DESC': return b.age - a.age;
+        case 'VALUE_DESC': return b.marketValue - a.marketValue;
+        case 'VALUE_ASC': return a.marketValue - b.marketValue;
+        default: return b.overall - a.overall;
+      }
+    });
+    
+    return filtered;
+  };
+
+  const processedPool = getFilteredAndSortedPool();
+  const totalPages = Math.ceil(processedPool.length / ITEMS_PER_PAGE);
+  const paginatedPool = processedPool.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, positionFilter, sortBy]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '4rem' }}>Yükleniyor...</div>;
   if (error) return <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--danger)' }}>{error}</div>;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-      <div className="cc-card" style={{ marginBottom: '2rem', textAlign: 'center' }}>
-        <h2>Draft Odası</h2>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>
-          Sıra: <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>
-            {draftState?.currentClubId === myClubId ? 'Sende!' : (draftState?.currentClubId ? 'Bekleniyor...' : 'Bilinmiyor')}
-          </span>
-        </p>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          SignalR Bağlantısı: {isConnected ? <span style={{ color: 'var(--accent)' }}>Aktif</span> : <span style={{ color: 'var(--danger)' }}>Bağlanıyor...</span>}
-        </p>
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+      
+      {/* HEADER PANEL */}
+      <div className="cc-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+            <h2>Draft Odası</h2>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+              Sıra: <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>
+                {rosterCount >= MAX_ROSTER_SIZE ? 'Draft Tamamlandı' : (draftState?.currentClubId === myClubId ? 'Sende!' : (draftState?.currentClubId ? 'Bekleniyor...' : 'Bilinmiyor'))}
+              </span>
+            </p>
+        </div>
+        
+        <div style={{ textAlign: 'right' }}>
+            <h3 style={{ fontSize: '1.5rem', margin: 0 }}>
+                Kadron: <span style={{ color: rosterCount >= MAX_ROSTER_SIZE ? 'var(--danger)' : 'var(--accent)' }}>
+                    {rosterCount} / {MAX_ROSTER_SIZE}
+                </span>
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+              SignalR Bağlantısı: {isConnected ? <span style={{ color: 'var(--accent)' }}>Aktif</span> : <span style={{ color: 'var(--danger)' }}>Bağlanıyor...</span>}
+            </p>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
-        {pool.map(player => (
-          <div key={player.playerId} style={{ 
-            backgroundColor: player.isClaimed ? 'rgba(0,0,0,0.5)' : 'var(--bg-card)',
-            border: '1px solid rgba(255,255,255,0.05)',
-            borderRadius: '8px',
-            padding: '1rem',
-            textAlign: 'center',
-            opacity: player.isClaimed ? 0.5 : 1,
-            position: 'relative'
-          }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'var(--accent)' }}>
-              {player.overall}
+      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+          
+        {/* MAIN POOL AREA */}
+        <div style={{ flex: '1', minWidth: 0 }}>
+            {/* FILTERS */}
+            <div className="cc-card" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', padding: '1rem' }}>
+                <input 
+                    type="text" 
+                    className="cc-input" 
+                    placeholder="Oyuncu Ara..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: '1', minWidth: '200px' }}
+                />
+                
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
+                        <button 
+                            key={pos}
+                            onClick={() => setPositionFilter(pos)}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '4px',
+                                backgroundColor: positionFilter === pos ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
+                                color: positionFilter === pos ? '#000' : 'var(--text-primary)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                cursor: 'pointer',
+                                fontWeight: positionFilter === pos ? 'bold' : 'normal'
+                            }}
+                        >
+                            {pos === 'ALL' ? 'Tümü' : pos}
+                        </button>
+                    ))}
+                </div>
+                
+                <select 
+                    className="cc-input" 
+                    value={sortBy} 
+                    onChange={(e) => setSortBy(e.target.value)}
+                    style={{ width: 'auto' }}
+                >
+                    <option value="OVERALL_DESC">Overall (Yüksek → Düşük)</option>
+                    <option value="OVERALL_ASC">Overall (Düşük → Yüksek)</option>
+                    <option value="AGE_ASC">Yaş (Genç → Yaşlı)</option>
+                    <option value="AGE_DESC">Yaş (Yaşlı → Genç)</option>
+                    <option value="VALUE_DESC">Değer (Yüksek → Düşük)</option>
+                </select>
             </div>
-            <h3 style={{ marginBottom: '0.5rem' }}>{player.name}</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              {player.position} | Yaş: {player.age}
-            </p>
-            <button 
-              className="cc-btn" 
-              onClick={() => handleClaim(player.playerId)}
-              disabled={player.isClaimed || draftState?.currentClubId !== myClubId}
-              style={{ 
-                width: '100%', 
-                padding: '0.5rem',
-                backgroundColor: player.isClaimed ? 'rgba(255,255,255,0.1)' : (draftState?.currentClubId !== myClubId ? 'rgba(255,255,255,0.05)' : 'var(--accent)'),
-                color: player.isClaimed || draftState?.currentClubId !== myClubId ? 'var(--text-secondary)' : '#000',
-                cursor: player.isClaimed || draftState?.currentClubId !== myClubId ? 'not-allowed' : 'pointer'
-              }}
+            
+            {/* GRID */}
+            {processedPool.length === 0 ? (
+                <div className="cc-card" style={{ textAlign: 'center', padding: '3rem' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>Kriterlere uygun oyuncu bulunamadı.</p>
+                </div>
+            ) : (
+                <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                        {paginatedPool.map(player => (
+                          <div key={player.playerId} style={{ 
+                            backgroundColor: player.isClaimed ? 'rgba(0,0,0,0.5)' : 'var(--bg-card)',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            textAlign: 'center',
+                            opacity: player.isClaimed ? 0.4 : 1,
+                            position: 'relative',
+                            transition: 'all 0.2s',
+                          }}>
+                            {player.isClaimed && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '10px', right: '10px',
+                                    backgroundColor: 'var(--danger)',
+                                    color: '#fff',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 'bold'
+                                }}>
+                                    SEÇİLDİ
+                                </div>
+                            )}
+                            
+                            <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem', color: 'var(--accent)' }}>
+                              {player.overall}
+                            </div>
+                            <h3 style={{ marginBottom: '0.2rem', fontSize: '1.1rem' }}>{player.name}</h3>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                              <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{player.position}</span> | Yaş: {player.age} <br/>
+                              <span style={{ fontSize: '0.8rem' }}>€{(player.marketValue / 1000000).toFixed(1)}M</span>
+                            </p>
+                            <button 
+                              className="cc-btn" 
+                              onClick={() => handleClaim(player.playerId)}
+                              disabled={player.isClaimed || draftState?.currentClubId !== myClubId || rosterCount >= MAX_ROSTER_SIZE || isClaiming}
+                              style={{ 
+                                width: '100%', 
+                                padding: '0.5rem',
+                                backgroundColor: (player.isClaimed || rosterCount >= MAX_ROSTER_SIZE || isClaiming) ? 'rgba(255,255,255,0.1)' : (draftState?.currentClubId !== myClubId ? 'rgba(255,255,255,0.05)' : 'var(--accent)'),
+                                color: (player.isClaimed || draftState?.currentClubId !== myClubId || rosterCount >= MAX_ROSTER_SIZE || isClaiming) ? 'var(--text-secondary)' : '#000',
+                                cursor: (player.isClaimed || draftState?.currentClubId !== myClubId || rosterCount >= MAX_ROSTER_SIZE || isClaiming) ? 'not-allowed' : 'pointer',
+                                border: 'none'
+                              }}
+                            >
+                              {player.isClaimed ? 'Seçildi' : (isClaiming ? 'Bekle...' : 'Seç')}
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                    
+                    {/* PAGINATION */}
+                    {totalPages > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                            <button 
+                                className="cc-btn"
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(p => p - 1)}
+                                style={{ padding: '0.5rem 1rem' }}
+                            >
+                                Önceki
+                            </button>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                                Sayfa {currentPage} / {totalPages}
+                            </span>
+                            <button 
+                                className="cc-btn"
+                                disabled={currentPage === totalPages}
+                                onClick={() => setCurrentPage(p => p + 1)}
+                                style={{ padding: '0.5rem 1rem' }}
+                            >
+                                Sonraki
+                            </button>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+        
+        {/* RIGHT PANEL - LINEUP PITCH & BENCH */}
+        <div style={{ width: '400px', flexShrink: 0, position: 'sticky', top: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            
+            {/* PITCH */}
+            <div className="cc-card" style={{ padding: '1.5rem 1rem' }}>
+                <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.8rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>İlk 11</span>
+                    <span style={{ color: rosterCount >= MAX_ROSTER_SIZE ? 'var(--danger)' : 'var(--accent)', fontSize: '1rem' }}>{rosterCount}/{MAX_ROSTER_SIZE} Seçim</span>
+                </h3>
+                
+                <div className="pitch-container">
+                    <div className="pitch-lines"></div>
+                    <div className="penalty-box-top"></div>
+                    <div className="penalty-box-bottom"></div>
+                    
+                    {FORMATION_SLOTS.map(slot => {
+                        const filledPlayerId = lineup[slot.id];
+                        const player = pool.find(p => p.playerId === filledPlayerId);
+                        
+                        return (
+                            <div 
+                                key={slot.id}
+                                className={`pitch-slot ${player ? 'filled' : ''}`}
+                                style={{ top: slot.top, left: slot.left }}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.currentTarget.classList.add('drag-over');
+                                }}
+                                onDragLeave={(e) => {
+                                    e.currentTarget.classList.remove('drag-over');
+                                }}
+                                onDrop={(e) => handleDropToSlot(e, slot.id)}
+                            >
+                                {player ? (
+                                    <div 
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, player.playerId)}
+                                        className="player-draggable"
+                                        style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        <div style={{ color: 'var(--accent)', fontWeight: '900', fontSize: '1.2rem', lineHeight: '1' }}>{player.overall}</div>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '90%', textAlign: 'center', marginTop: '2px' }}>
+                                            {player.name.split(' ').pop()}
+                                        </div>
+                                        <div className="slot-label" style={{ marginTop: '2px', opacity: 0.8 }}>{slot.label}</div>
+                                    </div>
+                                ) : (
+                                    <span className="slot-label">{slot.label}</span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* BENCH */}
+            <div 
+                className="cc-card" 
+                style={{ padding: '1rem', minHeight: '150px' }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDropToBench}
             >
-              {player.isClaimed ? 'Seçildi' : 'Seç'}
-            </button>
-          </div>
-        ))}
+                <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.8rem', marginBottom: '1rem' }}>
+                    Yedekler / Atanmamış
+                </h3>
+                
+                {rosterCount === 0 ? (
+                    <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0', fontSize: '0.9rem' }}>
+                        Henüz hiç oyuncu seçmedin.
+                    </p>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                        {myPicks.map((pick) => {
+                            const isPlaced = Object.values(lineup).includes(pick.playerId);
+                            if (isPlaced) return null; // Only show players not in the lineup
+                            
+                            const player = pool.find(p => p.playerId === pick.playerId);
+                            if (!player) return null;
+                            
+                            return (
+                                <div 
+                                    key={pick.playerId}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, player.playerId)}
+                                    className="player-draggable"
+                                    style={{ 
+                                        display: 'flex', 
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '0.6rem', 
+                                        backgroundColor: 'rgba(255,255,255,0.03)',
+                                        borderRadius: '6px',
+                                        borderLeft: `3px solid var(--accent)`
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{player.name}</span>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{player.position}</span>
+                                    </div>
+                                    <div style={{ 
+                                        backgroundColor: 'rgba(0,0,0,0.5)', 
+                                        padding: '0.2rem 0.5rem', 
+                                        borderRadius: '4px',
+                                        fontWeight: 'bold',
+                                        color: 'var(--accent)'
+                                    }}>
+                                        {player.overall}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        
+                        {myPicks.length > 0 && myPicks.every(pick => Object.values(lineup).includes(pick.playerId)) && (
+                            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem 0', fontSize: '0.85rem' }}>
+                                Tüm oyuncular sahada.
+                            </p>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
       </div>
     </div>
   );
