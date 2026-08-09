@@ -39,10 +39,6 @@ builder.Services.AddMassTransit(x =>
             e.UseEntityFrameworkOutbox<SessionDbContext>(context);
             e.ConfigureConsumer<DraftCompletedEventConsumer>(context);
             e.ConfigureConsumer<WeekSimulationCompletedEventConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("club-management-events", e =>
-        {
             e.ConfigureConsumer<ClubInitializedEventConsumer>(context);
         });
     });

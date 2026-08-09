@@ -22,4 +22,10 @@
     <ProjectReference Include="..\Infrastructure\ClubCraft.Draft.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="Data\draft-player-pool.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

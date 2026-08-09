@@ -18,15 +18,29 @@ public class StartDraftCommandHandler : IRequestHandler<StartDraftCommand, bool>
         
         if (session == null)
         {
-            // ODA (Room) YENİ OLUŞTURULUYOR - Sadece Swagger'da test edebilmek için geçici olarak sahte oyuncularla oluşturuyoruz
-            var fakePlayers = new List<ClubCraft.Draft.Domain.Entities.DraftPlayerPoolItem>
+            // ODA (Room) YENİ OLUŞTURULUYOR - Gerçek veri havuzundan rastgele 300 oyuncu seçiliyor
+            var poolPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "draft-player-pool.json");
+            var playersList = new List<ClubCraft.Draft.Domain.Entities.DraftPlayerPoolItem>();
+            if (System.IO.File.Exists(poolPath))
             {
-                new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Lionel Messi", "RW", 90, 36, 50000000)),
-                new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Cristiano Ronaldo", "ST", 88, 39, 30000000)),
-                new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Kylian Mbappe", "LW", 92, 25, 180000000)),
-                new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Erling Haaland", "ST", 91, 23, 180000000)),
-                new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Jude Bellingham", "CM", 90, 20, 150000000))
-            };
+                var json = System.IO.File.ReadAllText(poolPath);
+                var rawPlayers = System.Text.Json.JsonSerializer.Deserialize<List<PlayerDto>>(json) ?? new List<PlayerDto>();
+                
+                var random = new Random();
+                var selectedPlayers = rawPlayers.OrderBy(x => random.Next()).Take(300).ToList();
+                
+                foreach (var p in selectedPlayers)
+                {
+                    playersList.Add(new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot(p.Name, p.Position, p.Overall, p.Age, (decimal)p.MarketValue)));
+                }
+            }
+            
+            if (playersList.Count == 0) // Fallback in case JSON is missing or empty
+            {
+                playersList.Add(new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Fallback Player", "FWD", 70, 25, 1000000)));
+            }
+
+            var fakePlayers = playersList;
 
             // Not: Gerçekte DraftSession ID'si RoomId ile aynı tutulabilir veya Create komutu ile dışarıdan verilir. 
             // Burada testi kolaylaştırmak için RoomId = request.DraftSessionId yapıyoruz.
@@ -45,4 +59,13 @@ public class StartDraftCommandHandler : IRequestHandler<StartDraftCommand, bool>
 
         return true;
     }
+}
+
+public class PlayerDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Position { get; set; } = string.Empty;
+    public int Overall { get; set; }
+    public int Age { get; set; }
+    public double MarketValue { get; set; }
 }
