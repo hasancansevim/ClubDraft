@@ -322,6 +322,177 @@ POST /sponsorship-offers/{offerId}/respond
 > bağlı olduğu, ilk E2E testinde zaman damgalı loglarla (timeout'a değil gerçek
 > event'e göre ilerlediği) doğrulanmalı.
 
+> ⚠️ **Minimal API + Outbox tuzağı (FinanceSponsorship kurulumunda bulundu):** MediatR
+> tabanlı (Controller + CommandHandler) servislerde `IPublishEndpoint` doğal olarak
+> Scoped enjekte edilir ve Outbox'a doğru yazar. Ama **Minimal API** (`app.MapPost`)
+> kullanılan servislerde, endpoint parametresine doğrudan `IPublishEndpoint` yazmak
+> bazen **Singleton/Global Bus** örneğini getirebilir — bu, Outbox'ı tamamen bypass
+> edip mesajı doğrudan RabbitMQ'ya gönderir ve DB-transaction atomikliğini bozar.
+> **Çözüm:** Minimal API endpoint'lerinde `httpContext.RequestServices.GetRequiredService<IPublishEndpoint>()`
+> ile açıkça Scoped instance'ı çek. Yeni bir Minimal-API-tabanlı servis/endpoint
+> yazılırken bu mutlaka test edilmeli (Outbox tablosunda INSERT→DELETE log izi
+> aranarak doğrulanmalı, sadece "hata yok" yeterli değil).
+
+**Durum (bu not itibarıyla):** Draft, ClubManagement, MatchEngine, ReputationFan,
+FinanceSponsorship servislerinin tamamı E2E doğrulanmış ve onaylanmıştır — tam zincir
+(Draft→ClubManagement→MatchEngine→ReputationFan→FinanceSponsorship→ClubManagement)
+gerçek Docker altyapısında ölçüm ve DB sorgularıyla kanıtlanmıştır. Kalan servisler:
+Session, API Gateway, Realtime Hub.
+
+> 💡 **Test tekniği notu (Session kurulumunda kullanıldı):** Çok-servisli bağımlılık
+> zincirlerini (örn. MatchEngine → Session) uçtan uca test etmek ağır kalıyorsa,
+> ortadaki servisi tam ayağa kaldırmak yerine, hedef servise geçici bir debug
+> endpoint'i (`/api/debug/publish-X-event`) ekleyip doğrudan ilgili integration
+> event'i RabbitMQ'ya publish ederek tüketen tarafın tepkisini izole test etmek
+> geçerli ve hafif bir yöntemdir — DB log'larında beklenen UPDATE/concurrency
+> sorgularının göründüğü doğrulanmalı.
+
+**Durum:** Session servisi de E2E doğrulandı (Lobby→Draft geçişi, snake draft
+turn order — round sayısı `MaxRosterSize` (20) ile hizalandı, `AdvanceWeek`
+zinciri xmin/optimistic-concurrency ile). Kalan: RealtimeHub (SignalR), API Gateway.
+
+> ⚠️ **YARP + SignalR/WebSocket notu (API Gateway kurulumunda bulundu):** YARP
+> reverse proxy, varsayılan olarak WebSocket upgrade'i proxy'lemez —
+> `Program.cs`'te `app.UseWebSockets()` middleware'i **açıkça** eklenmeli, yoksa
+> SignalR bağlantıları gateway üzerinden kurulamaz. Ayrıca `appsettings.json`'daki
+> cluster hedef portlarının gerçek servis portlarıyla senkron olduğu ayrıca
+> doğrulanmalı — YARP config'i "yazılmış" olması "doğru" olduğu anlamına gelmez,
+> gerçek bir SignalR bağlantısı kurup log'da `101 Switching Protocols` yanıtının
+> göründüğü teyit edilmeli.
+
+---
+
+## BACKEND TAMAMLANDI (bu not itibarıyla)
+
+Sekiz servisin tamamı (Draft, ClubManagement, MatchEngine, ReputationFan,
+FinanceSponsorship, Session, SagaOrchestrator, RealtimeHub) + API Gateway (YARP),
+gerçek Docker altyapısında, sentetik olmayan uçtan uca senaryolarla doğrulandı:
+- Draft→ClubManagement Saga (concurrency, timeout, compensating action)
+- ClubManagement→MatchEngine→ReputationFan→FinanceSponsorship→ClubManagement
+  event zinciri (Outbox/Inbox ile atomik ve idempotent)
+- Session→Draft otomatik tetikleme (ready-check → snake draft başlatma)
+- RealtimeHub üzerinden gerçek zamanlı SignalR event akışı
+- Tüm bunların **API Gateway (YARP) üzerinden**, WebSocket upgrade dahil, çalıştığı
+
+**Sıradaki aşama: Frontend.** İlk konuşulacak konu (unutulmaması için not düşüldü):
+**oda kodu / davet linki UX'i** — şu an backend sadece ham `RoomId` (Guid)
+üretiyor, kullanıcı dostu bir paylaşım mekanizması (kısa kod, link) henüz
+tasarlanmadı.
+
+## 6. Frontend (Karar Verildi)
+
+- **Framework:** React (Angular deneyimi göz önüne alınarak değerlendirildi, ama
+  veri-odaklı ekran ağırlığı, geniş ekosistem ve "backend .NET + frontend React"
+  piyasa eşleşmesi nedeniyle React seçildi).
+- **Oda Katılım UX'i:** Link + kısa kod ikisi birden.
+  - Ana yöntem: paylaşılabilir link (`clubcraft.app/join/{roomId}`), tıklanınca
+    otomatik katılım akışına düşer.
+  - Yedek yöntem: 6 haneli insan-okur kısa kod (örn. `TIGER42`).
+  - **Backend'e gereken ek iş:** Session servisine, `RoomId`'nin yanında kısa
+    kod üretme/saklama eklenmeli (henüz yapılmadı).
+- **Sayfa haritası:** Ana Sayfa (kur/katıl) → Lobi (ready-check) → Draft Ekranı
+  (canlı, SignalR) → Sezon Dashboard'u (fikstür/kadro/bütçe/haftalık kararlar)
+  → Maç Sonuç Ekranı → Sponsorluk Bildirimi → Sezon Sonu/Skor Tablosu.
+- **İnşa sırası:** (1) proje iskeleti + routing, (2) API + SignalR entegrasyon
+  katmanı (merkezi servis/hook katmanı), (3) sayfa sayfa UI, Lobi'den başlayarak.
+
+### 6.1 Görsel Tasarım Sistemi (Karar Verildi)
+
+**Stil yönü:** Modern spor dashboard'u (FIFA Ultimate Team / Football Manager esintili), kart-temelli arayüz.
+
+- **Zemin:** Çok koyu lacivert/siyah (`#0A0E17` civarı)
+- **Kart yüzeyi:** Bir ton açık (`#131826` civarı), ince border, yumuşak köşe (12-16px)
+- **Vurgu rengi:** Elektrik yeşil (`#39FF88` civarı) — pozitif aksiyon/aktif durum; kritik/uyarı için ayrı bir turuncu/kırmızı ton
+- **Metin:** Kırık beyaz ana metin, gri-mavi ikincil metin
+- **Tipografi:** Başlıklarda sportif/dar bir font (Rajdhani/Orbitron/Barlow Condensed ailesi), gövdede Inter
+- **Oyuncu/kulüp kartları:** Overall değeri büyük ve belirgin, mevki rozetleri renk kodlu (GK/DEF/MID/FWD), hover'da hafif yükselme/glow
+- **Butonlar:** Dolgun, vurgu renginde, hafif glow efekti
+
+Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) olarak kurulup, mevcut placeholder sayfalara uygulanacak.
+
+### 6.2 Frontend İlerleme Durumu (güncel)
+
+**Tamamlanan:**
+- Proje iskeleti (Vite + React + TS), routing, tasarım sistemi (§6.1) uygulandı
+- Ana Sayfa: "Oda Kur" ve "Odaya Katıl" (kısa kod), gerçek API'ye bağlı
+- API client katmanı (`src/api/sessionApi.ts`) ve SignalR hook'u (`src/hooks/useSignalR.ts`)
+- **Lobi ekranı çalışıyor:** kısa kod → gerçek RoomId çözümleme, kulüp adıyla katılma,
+  katılımcı listesi SignalR ile birden fazla tarayıcı sekmesi arasında canlı senkron
+  (gerçek iki-sekme testiyle doğrulandı)
+
+> ⚠️ **Not (Lobi kurulumunda karşılaşıldı):** "Katıl" isteği tarayıcıda 400 hatası
+> gösterdi ama katılımcı aslında eklenmişti (sayfa yenilenince görünüyordu). Kök
+> sebep netleştirilip düzeltildi. Ders: "sayfa yenileyince çalışıyor" gibi
+> belirtiler gerçek bir hatayı gizleyebilir (yanlış status code, response/state
+> tutarsızlığı gibi) — sadece "sonuçta çalışıyor" deyip geçmemeli, network
+> payload'ı ile asıl sebep görülmeli.
+
+**Sırada:**
+1. ~~"Hazırım" butonu~~ ✅ Tamamlandı — canlı senkron doğrulandı
+2. ~~Draft ekranı~~ ✅ Tamamlandı — iki gizli pencereyle gerçek zamanlı seçim/sıra
+   güncelleme kanıtlandı (ekran görüntüleriyle)
+3. **ClubId teknik borcunun kapatılması** (yukarıdaki nota bkz.) — Sezon
+   Dashboard'a geçmeden önce yapılmalı, çünkü bütçe/roster gerçek `Club`
+   verisine bağlı olacak
+4. Sezon Dashboard, Sponsorluk, Özet ekranları
+5. UI/UX zenginleştirme: arama/filtre/sıralama (oyuncu havuzu), native
+   `alert()` yerine tasarım sistemine uygun toast/modal, genel görsel
+   zenginlik — kullanıcı bunu bilinçli olarak "önce çekirdek döngü" sonrasına
+   erteledi
+
+> 🚨 **Ciddi regresyon notu (frontend Lobi entegrasyonunda git geçmişi taranarak
+> bulundu):** Bir önceki oturumda, RealtimeHub E2E testindeki bir zamanlama
+> (timing) sorununu "çözmek" için Session servisinde `UseBusOutbox()` bilinçli
+> olarak kaldırılmış ve Minimal API endpoint'leri Scoped `IPublishEndpoint`
+> yerine global `IBus`/`IPublishEndpoint` kullanacak şekilde değiştirilmişti —
+> yani atomiklik garantisi tamamen feda edilmişti, hem de **kritik** bir event
+> için (`AllParticipantsReadyForDraftEvent`, Draft servisini tetikleyen).
+> Bu, hiçbir E2E testte fark edilmemişti çünkü "event nihayetinde gitti"
+> (asenkron/best-effort) ile "event atomik ve garantili gitti" arasındaki farkı
+> mevcut testler ayırt etmiyordu. **Ders:** Outbox/atomiklik ile ilgili herhangi
+> bir kod her kaldırıldığında/bypass edildiğinde (commit mesajında "timing",
+> "geçici çözüm" gibi ifadeler varsa özellikle) bu mutlaka ayrıca sorgulanmalı
+> — "test geçti" tek başına yeterli kanıt değil. Şüpheli bir davranış
+> görüldüğünde `git log -S` ile arama, kök sebebi bulmakta çok etkili oldu.
+
+> 📌 **Bilinen teknik borç (frontend Draft entegrasyonunda tespit edildi):**
+> Draft servisi şu an `TurnOrder`/`ClubId` olarak Session'ın ürettiği ham
+> `ParticipantId`'yi kullanıyor — `ClubManagement`'ın gerçek `Club.ClubId`'si
+> hiç devreye girmiyor (Lobi'de katılırken ClubManagement'a `InitializeClub`
+> çağrısı yapılmıyor). Bu, frontend'i çalışır kılmak için bilinçli olarak
+> şimdilik kabul edilen bir kısayol. **Sonuç:** Draft'ta seçilen oyuncular
+> şu anki haliyle gerçek bir `Club` aggregate'ine bağlanamaz — Saga
+> (`AddPlayerToRosterCommand`) böyle bir `ClubId` bulamayıp timeout'a düşer.
+> **Yapılacak (frontend akışı bittikten sonra):** Lobi'de "Katıl" akışına
+> ClubManagement'ın `InitializeClub` çağrısını ekleyip, dönen gerçek `ClubId`'yi
+> Session'a/Draft'a taşıyan bir düzeltme turu planlanmalı.
+
+> 📌 **Oyuncu havuzu veri kaynağı notu:** Draft servisinin oyuncu havuzu, Kaggle'daki
+> "EA Sports FC 24 Complete Player Dataset" (sofifa.com'dan derlenmiş, topluluk
+> kaynaklı) baz alınarak oluşturuldu — 8 lig (Premier League, La Liga, Serie A,
+> Bundesliga, Ligue 1, Süper Lig, Primeira Liga, Saudi Pro League), overall
+> eşiği Saudi Pro League için ≥78, diğerleri için ≥68. Bu, gerçek oyuncu
+> isimleri/verileri içerir — bilinçli bir risk kabulüyle kullanılmıştır
+> (kişisel/portfolyo projesi, ticari amaç yok). Yayınlarken/paylaşırken bu
+> şeffaf şekilde belirtilmeli.
+
+> 🚨 **Saga timeout / ortam-duyarsız sabit değer notu (frontend Draft turlarında bulundu):**
+> `DraftPickStateMachine`'deki 30 saniyelik sabit `s.Delay` (Saga timeout), geliştirme
+> ortamındaki sık servis yeniden başlatmaları + soğuk RabbitMQ/DB bağlantıları
+> yüzünden **erken tetikleniyordu** — tamamlanmış pick'ler `RevertClaim` ile geri
+> alınıyor, kullanıcıya "kadro sıfırlandı, oyuncu tekrar seçilebilir oldu" olarak
+> yansıyordu. **Kanıt:** SagaOrchestrator DB'sinde 50+ kayıt `RevertingDraftClaim`
+> state'inde takılı bulundu. **Kalıcı çözüm:** Timeout süresi `appsettings.json`'a
+> taşındı (`DraftPick:PickTimeoutSeconds`), production'da 30s, development'ta 120s.
+> **Ders:** Saga/timeout gibi zamanlamaya dayalı sabitler asla hardcode edilmemeli,
+> ortam bazlı konfigüre edilebilir olmalı — geliştirme ortamının doğası
+> (sık restart, soğuk başlangıç) production'dan farklıdır.
+
+**Durum:** Draft ekranı (arama/filtre/sıralama, kadro sayacı, lineup sürükle-bırak,
+sayfa yenileme sonrası state korunumu, çoklu-istemci senkronizasyonu, Saga
+timeout düzeltmesi) uçtan uca doğrulandı ve **tamamlandı**. Sırada: ClubId akışı
+zaten kapatılmıştı; şimdi Sezon Dashboard, Sponsorluk, Özet ekranları.
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
