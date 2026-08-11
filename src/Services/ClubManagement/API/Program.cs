@@ -36,6 +36,9 @@ builder.Services.AddMassTransit(x =>
 
         cfg.ReceiveEndpoint("club-management-commands", e =>
         {
+            // Outbox zorunlu: AddPlayerToRoster işledikten sonra
+            // PlayerAddedToRosterEvent'in Saga'ya atomik olarak iletilmesi için
+            e.UseEntityFrameworkOutbox<ClubCraft.ClubManagement.Infrastructure.Persistence.ClubDbContext>(context);
             e.ConfigureConsumer<AddPlayerToRosterCommandConsumer>(context);
             e.ConfigureConsumer<ReleasePlayerFromRosterCommandConsumer>(context);
         });
