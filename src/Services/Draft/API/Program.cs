@@ -68,11 +68,16 @@ builder.Services.AddMassTransit(x =>
         
         cfg.ReceiveEndpoint("draft-commands", e =>
         {
+            // Outbox zorunlu: ReleasePlayerClaimCommand işlendiğinde
+            // PlayerClaimRevertedEvent atomik olarak Saga'ya iletilmeli
+            e.UseEntityFrameworkOutbox<DraftDbContext>(context);
             e.ConfigureConsumer<ClubCraft.Draft.API.Consumers.ReleasePlayerClaimCommandConsumer>(context);
         });
 
         cfg.ReceiveEndpoint("draft-events", e =>
         {
+            // Outbox zorunlu: Draft başlatma event'i atomik işlenmeli
+            e.UseEntityFrameworkOutbox<DraftDbContext>(context);
             e.ConfigureConsumer<ClubCraft.Draft.API.Consumers.AllParticipantsReadyForDraftEventConsumer>(context);
         });
 

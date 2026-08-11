@@ -102,7 +102,7 @@ public class DraftSession : AggregateRoot<Guid>
 
     public void RevertClaim(Guid pickAttemptId, Guid playerId)
     {
-        // Compensating action for Saga
+        // Saga compensating action — kadro limiti aşıldığında veya nadir bir hata durumunda tetiklenir.
         var pick = _picks.LastOrDefault(p => p.PlayerId == playerId);
         if (pick == null)
             return;
@@ -116,18 +116,19 @@ public class DraftSession : AggregateRoot<Guid>
         var affectedClubId = pick.ClubId;
         _picks.Remove(pick);
 
-        // CurrentPickIndex'i 1 geri al — aynı slot yeniden denenilebilir.
-        // "Makeup pick" yaklaşımı (Insert + index tutma) her revert'te
-        // TurnOrder'ı şişiriyor ve deadlock'a yol açıyordu.
-        if (CurrentPickIndex > 0)
-            CurrentPickIndex--;
+        // ÖNEMLİ: CurrentPickIndex'i GERİ ALMIYORUZ — "makeup pick" tasarımı.
+        // Revert anında draft başka pick'lerle ilerlemiş olabilir; index-- yapmak
+        // o aralıkta yapılmış pick'lerin slot'larını bozar (race condition §4.7).
+        // Bunun yerine etkilenen kulübe mevcut CurrentPickIndex pozisyonuna
+        // bir "makeup" sırası ekliyoruz — hakkı kaybolmaz, sadece sonraya kayar.
+        _turnOrder.Insert(CurrentPickIndex, affectedClubId);
 
-        // Eğer draft completed olmuşsa geri çekildiğinde durum InProgress'e dönmeli
+        // Eğer draft completed olmuşsa InProgress'e geri dön
         Status = DraftStatus.InProgress;
 
         AddDomainEvent(new PlayerClaimRevertedEvent(pickAttemptId, Id, playerId, affectedClubId));
-        
-        // Sıra tekrar o kulübe dönüyor — DraftTurnAdvancedEvent yayınla
+
+        // Yeni CurrentPickIndex'teki kulübe sıra bildirimi (Insert sonrası aynı index, aynı kulüp)
         if (CurrentPickIndex < _turnOrder.Count)
         {
             AddDomainEvent(new DraftTurnAdvancedEvent(Id, _turnOrder[CurrentPickIndex], CurrentPickIndex));
