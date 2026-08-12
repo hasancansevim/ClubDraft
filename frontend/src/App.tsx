@@ -1,27 +1,103 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import './index.css';
 import { sessionApi } from './api/sessionApi';
 import type { Participant } from './api/sessionApi';
 import { useSignalR } from './hooks/useSignalR';
+import { draftApi, type Player, type DraftState } from './api/draftApi';
 
+// ─── TOAST SYSTEM ────────────────────────────────────────────────────────────
+type ToastType = 'success' | 'error' | 'warning' | 'info';
+interface Toast { id: number; type: ToastType; msg: string; }
+
+const toastIcons: Record<ToastType, string> = {
+  success: '✓', error: '✕', warning: '⚠', info: 'ℹ',
+};
+
+let toastIdCounter = 0;
+let globalAddToast: ((type: ToastType, msg: string) => void) | null = null;
+
+export const toast = (type: ToastType, msg: string) => { globalAddToast?.(type, msg); };
+
+const ToastContainer = () => {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const removingRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    globalAddToast = (type, msg) => {
+      const id = ++toastIdCounter;
+      setToasts(prev => [...prev, { id, type, msg }]);
+      setTimeout(() => dismiss(id), 3500);
+    };
+    return () => { globalAddToast = null; };
+  }, []);
+
+  const dismiss = (id: number) => {
+    if (removingRef.current.has(id)) return;
+    removingRef.current.add(id);
+    // Give animation time to play
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+      removingRef.current.delete(id);
+    }, 280);
+  };
+
+  return (
+    <div className="cc-toast-container">
+      {toasts.map(t => (
+        <div
+          key={t.id}
+          className={`cc-toast cc-toast-${t.type}`}
+          onClick={() => dismiss(t.id)}
+        >
+          <span className="cc-toast-icon">{toastIcons[t.type]}</span>
+          <span className="cc-toast-msg">{t.msg}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── LOADER ──────────────────────────────────────────────────────────────────
+const Loader = ({ text = 'Yükleniyor...' }: { text?: string }) => (
+  <div className="cc-loader-overlay">
+    <div className="cc-loader">
+      <div className="cc-loader-ring-outer" />
+      <div className="cc-loader-ring-inner" />
+      <div className="cc-loader-center">CC</div>
+    </div>
+    <span className="cc-loader-text">{text}</span>
+  </div>
+);
+
+// ─── POSITION BADGE ───────────────────────────────────────────────────────────
+const PosBadge = ({ pos }: { pos: string }) => (
+  <span className={`cc-pos-badge ${pos}`}>{pos}</span>
+);
+
+// ─── OVERALL COLOR ────────────────────────────────────────────────────────────
+const overallColor = (ov: number) => {
+  if (ov >= 85) return '#FFD700';
+  if (ov >= 80) return '#39FF88';
+  if (ov >= 75) return '#4A9EFF';
+  return '#8B93A7';
+};
+
+// ─── HOME PAGE ────────────────────────────────────────────────────────────────
 const Home = () => {
   const [roomCode, setRoomCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleCreateRoom = async () => {
     try {
       setIsCreating(true);
-      setError(null);
       const hostUserId = crypto.randomUUID();
       const response = await sessionApi.createRoom(hostUserId, 6);
       navigate(`/lobby/${response.shortCode || response.roomId}`);
-    } catch (err: any) {
-      console.error(err);
-      setError('Oda oluşturulurken bir hata oluştu: ' + (err.response?.data || err.message));
+    } catch {
+      toast('error', 'Oda oluşturulurken bir hata oluştu.');
     } finally {
       setIsCreating(false);
     }
@@ -30,84 +106,73 @@ const Home = () => {
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomCode.trim()) return;
-    
     try {
       setIsJoining(true);
-      setError(null);
       const code = roomCode.trim().toUpperCase();
       const response = await sessionApi.getRoomByCode(code);
-      if (response && response.id) {
+      if (response?.id) {
         navigate(`/lobby/${response.shortCode}`);
       } else {
-        setError('Oda bulunamadı.');
+        toast('error', 'Oda bulunamadı.');
       }
-    } catch (err: any) {
-      console.error(err);
-      setError('Oda bulunamadı veya bağlantı hatası.');
+    } catch {
+      toast('error', 'Oda bulunamadı veya bağlantı hatası.');
     } finally {
       setIsJoining(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ textAlign: 'center', marginBottom: '4rem', marginTop: '2rem' }}>
-        <h1 style={{ fontSize: '4rem', fontWeight: '700', marginBottom: '0.5rem', letterSpacing: '2px', textTransform: 'uppercase' }}>
-          CLUB<span style={{ color: 'var(--accent)' }}>CRAFT</span>
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '1.2rem', maxWidth: '600px' }}>
-          Kendi futbol kulübünü kur, kadronu draft et ve arkadaşlarına karşı zekanı konuştur.
-        </p>
+    <div className="cc-home">
+      {/* Pitch background decoration */}
+      <div className="cc-home-pitch-lines" />
+
+      <div className="cc-home-logo">
+        CLUB<span className="accent">CRAFT</span>
       </div>
+      <p className="cc-home-tagline">Draft · Manage · Dominate</p>
 
-      {error && (
-        <div style={{ backgroundColor: 'var(--danger)', color: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '2rem', width: '100%', maxWidth: '830px', textAlign: 'center' }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: '2rem', width: '100%', flexWrap: 'wrap', justifyContent: 'center' }}>
-        {/* Create Room Card */}
-        <div className="cc-card" style={{ flex: '1', minWidth: '300px', maxWidth: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>YENİ SEZON BAŞLAT</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-            Arkadaşlarını davet etmek için yeni bir lig oluştur. Oyunun host'u sen ol.
-          </p>
-          <div style={{ marginTop: 'auto', width: '100%' }}>
-            <button 
-              className="cc-btn" 
-              style={{ width: '100%', opacity: isCreating ? 0.7 : 1 }} 
-              onClick={handleCreateRoom}
-              disabled={isCreating}
-            >
-              {isCreating ? 'Oluşturuluyor...' : 'Oda Kur'}
-            </button>
-          </div>
+      <div className="cc-home-cards">
+        {/* Create card */}
+        <div className="cc-home-card">
+          <div className="cc-home-card-icon">🏆</div>
+          <h2>Yeni Sezon Başlat</h2>
+          <p>Arkadaşlarını davet etmek için yeni bir lig oluştur. Oyunun host'u sen ol.</p>
+          <button
+            className="cc-btn"
+            style={{ width: '100%', marginTop: 'auto' }}
+            onClick={handleCreateRoom}
+            disabled={isCreating}
+            id="btn-create-room"
+          >
+            {isCreating ? <><span className="cc-spinner" />Oluşturuluyor...</> : 'Oda Kur'}
+          </button>
         </div>
 
-        {/* Join Room Card */}
-        <div className="cc-card" style={{ flex: '1', minWidth: '300px', maxWidth: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>ODAYA KATIL</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-            Arkadaşından aldığın 6 haneli kısa kodu girerek lige dahil ol.
-          </p>
-          <form onSubmit={handleJoin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 'auto' }}>
-            <input 
-              type="text" 
-              className="cc-input" 
-              placeholder="Örn: TIGER42" 
+        {/* Join card */}
+        <div className="cc-home-card">
+          <div className="cc-home-card-icon">⚽</div>
+          <h2>Odaya Katıl</h2>
+          <p>Arkadaşından aldığın 6 haneli kısa kodu girerek lige dahil ol.</p>
+          <form onSubmit={handleJoin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: 'auto' }}>
+            <input
+              type="text"
+              className="cc-input"
+              placeholder="Örn: TIGER42"
               value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value)}
-              style={{ textAlign: 'center', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 'bold' }}
+              onChange={e => setRoomCode(e.target.value)}
+              style={{ textAlign: 'center', textTransform: 'uppercase', letterSpacing: '4px', fontFamily: 'Orbitron, sans-serif', fontWeight: '700' }}
               maxLength={6}
+              id="input-room-code"
             />
-            <button 
-              type="submit" 
-              className="cc-btn" 
-              style={{ width: '100%', backgroundColor: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)', opacity: isJoining ? 0.7 : 1 }}
+            <button
+              type="submit"
+              className="cc-btn cc-btn-ghost"
+              style={{ width: '100%' }}
               disabled={isJoining || !roomCode.trim()}
+              id="btn-join-room"
             >
-              {isJoining ? 'Bağlanıyor...' : 'Katıl'}
+              {isJoining ? <><span className="cc-spinner" style={{ borderTopColor: 'var(--accent)' }} />Bağlanıyor...</> : 'Katıl'}
             </button>
           </form>
         </div>
@@ -116,93 +181,73 @@ const Home = () => {
   );
 };
 
+// ─── LOBBY ────────────────────────────────────────────────────────────────────
 const Lobby = () => {
-  const { roomId: shortCode } = useParams(); // URL'de roomId diye okuduğumuz şey aslında shortCode
+  const { roomId: shortCode } = useParams();
   const navigate = useNavigate();
-  
-  const [realRoomId, setRealRoomId] = useState<string>('');
+
+  const [realRoomId, setRealRoomId] = useState('');
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Fake auth for now
+
   const [myUserId] = useState(() => {
     const existing = localStorage.getItem('myUserId');
     if (existing) return existing;
-    const newId = crypto.randomUUID();
-    localStorage.setItem('myUserId', newId);
-    return newId;
+    const id = crypto.randomUUID();
+    localStorage.setItem('myUserId', id);
+    return id;
   });
-  const [myParticipantId, setMyParticipantId] = useState<string | null>(() => {
-    return localStorage.getItem(`joined_${shortCode}`) || null;
-  });
+  const [myParticipantId, setMyParticipantId] = useState<string | null>(() =>
+    localStorage.getItem(`joined_${shortCode}`) || null
+  );
   const [clubName, setClubName] = useState('');
-  
-  // 1. Component mount olunca ShortCode'u çöz ve detayları çek
+
   useEffect(() => {
     const fetchRoom = async () => {
       try {
         if (!shortCode) return;
         const room = await sessionApi.getRoomByCode(shortCode);
-        if (room && room.id) {
+        if (room?.id) {
           setRealRoomId(room.id);
-          // Odanın güncel katılımcı listesini al
           const fullRoom = await sessionApi.getRoom(room.id);
           setParticipants(fullRoom.participants || []);
         } else {
           setError('Oda bulunamadı.');
         }
-      } catch (err) {
-        console.error(err);
+      } catch {
         setError('Oda bilgileri alınamadı.');
       } finally {
         setLoading(false);
       }
     };
     fetchRoom();
-    
-    // Auto-poll to fetch ClubId if it's missing for myself
+
     const interval = setInterval(() => {
-        if (realRoomId) {
-            sessionApi.getRoom(realRoomId).then(fullRoom => {
-                setParticipants(fullRoom.participants || []);
-            }).catch(console.error);
-        }
+      if (realRoomId) {
+        sessionApi.getRoom(realRoomId)
+          .then(r => setParticipants(r.participants || []))
+          .catch(() => {});
+      }
     }, 2000);
-    
     return () => clearInterval(interval);
   }, [shortCode, realRoomId]);
 
-  // 2. RealRoomId çözüldükten sonra SignalR'a bağlan
   const { isConnected } = useSignalR({
-    roomId: realRoomId, // Gerçek ID ile bağlan
+    roomId: realRoomId,
     userId: myUserId,
     onParticipantJoined: (data) => {
-      console.log('SIGNALR EVENT: onParticipantJoined', JSON.stringify(data));
       setParticipants(prev => {
-        const newP = {
-          id: data.participantId,
-          userId: data.userId,
-          clubName: data.clubName,
-          isReady: false,
-          clubId: data.clubId // SignalR update should ideally include it, but polling will fix it.
-        };
-        return prev.some(p => p.id === newP.id)
-          ? prev.map(p => p.id === newP.id ? newP : p)
-          : [...prev, newP];
+        const p = { id: data.participantId, userId: data.userId, clubName: data.clubName, isReady: false, clubId: data.clubId };
+        return prev.some(x => x.id === p.id) ? prev.map(x => x.id === p.id ? p : x) : [...prev, p];
       });
     },
     onParticipantReady: (data) => {
-      console.log('SIGNALR EVENT: onParticipantReady', JSON.stringify(data));
-      setParticipants(prev => prev.map(p => 
-        p.id === data.participantId ? { ...p, isReady: true } : p
-      ));
+      setParticipants(prev => prev.map(p => p.id === data.participantId ? { ...p, isReady: true } : p));
     },
-    onDraftReady: (data) => {
-      console.log('Draft is ready!', data);
-      // Herkes hazır olduğunda otomatik draft'a yönlendir
+    onDraftReady: () => {
       navigate(`/draft/${shortCode}`);
-    }
+    },
   });
 
   const handleJoinLobby = async (e: React.FormEvent) => {
@@ -212,9 +257,8 @@ const Lobby = () => {
       const response = await sessionApi.joinRoom(realRoomId, myUserId, clubName);
       setMyParticipantId(response.participantId);
       localStorage.setItem(`joined_${shortCode}`, response.participantId);
-    } catch (err) {
-      console.error(err);
-      alert('Katılım başarısız');
+    } catch {
+      toast('error', 'Katılım başarısız. Tekrar dene.');
     }
   };
 
@@ -222,72 +266,117 @@ const Lobby = () => {
     if (!realRoomId || !myParticipantId) return;
     try {
       await sessionApi.markReady(realRoomId, myParticipantId, 'Draft');
-      // Optimistic update removed; letting SignalR handle the broadcast to all (including self)
-    } catch (err) {
-      console.error(err);
-      alert('Hazır durumu işaretlenemedi');
+    } catch {
+      toast('error', 'Hazır durumu işaretlenemedi.');
     }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '4rem' }}>Yükleniyor...</div>;
-  if (error) return <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--danger)' }}>{error}</div>;
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(shortCode || '').then(() => toast('success', 'Oda kodu kopyalandı!')).catch(() => {});
+  };
+
+  if (loading) return <Loader text="Lobi Yükleniyor..." />;
+  if (error) return (
+    <div className="cc-error-state">
+      <div style={{ fontSize: '3rem' }}>⚠</div>
+      <p>{error}</p>
+      <Link to="/" className="cc-btn">Ana Sayfaya Dön</Link>
+    </div>
+  );
+
+  const myP = participants.find(p => p.id === myParticipantId);
+  const readyCount = participants.filter(p => p.isReady).length;
+  const readyPct = participants.length > 0 ? (readyCount / participants.length) * 100 : 0;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <div className="cc-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '2.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem', marginBottom: '1rem' }}>
-          Lobi Kodun: <span style={{ color: 'var(--accent)', letterSpacing: '2px' }}>{shortCode}</span>
-        </h2>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p style={{ color: 'var(--text-secondary)' }}>
-            SignalR Bağlantısı: {isConnected ? <span style={{ color: 'var(--accent)' }}>Aktif</span> : <span style={{ color: 'var(--danger)' }}>Bağlanıyor...</span>}
-          </p>
-          <p style={{ color: 'var(--text-secondary)' }}>
-            Oda ID: <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>{realRoomId}</span>
-          </p>
+    <div className="cc-lobby">
+      {/* Header */}
+      <div className="cc-lobby-header">
+        <div>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>Lobi</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className={`cc-signal-dot ${isConnected ? 'connected' : ''}`} />
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'Rajdhani, sans-serif', letterSpacing: '0.5px' }}>
+              {isConnected ? 'Gerçek Zamanlı Aktif' : 'Bağlanıyor...'}
+            </span>
+          </div>
+        </div>
+        <div
+          className="cc-room-code"
+          onClick={handleCopyCode}
+          title="Kopyala"
+          id="lobby-room-code"
+        >
+          <span className="cc-room-code-text">{shortCode}</span>
+          <span className="cc-room-code-copy">📋 Kopyala</span>
         </div>
       </div>
 
+      {/* Join form */}
       {!myParticipantId ? (
-        <div className="cc-card" style={{ marginBottom: '2rem' }}>
-          <h3 style={{ marginBottom: '1rem' }}>Kulübünü Oluştur</h3>
-          <form onSubmit={handleJoinLobby} style={{ display: 'flex', gap: '1rem' }}>
-            <input 
-              type="text" 
-              className="cc-input" 
-              placeholder="Kulüp Adı (Örn: FC Kaplanlar)" 
+        <div className="cc-card" style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ marginBottom: '0.5rem', fontSize: '1.3rem' }}>Kulübünü Oluştur</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+            Draft'a katılmak için bir kulüp adı belirle.
+          </p>
+          <form onSubmit={handleJoinLobby} style={{ display: 'flex', gap: '0.75rem' }}>
+            <input
+              type="text"
+              className="cc-input"
+              placeholder="Kulüp Adı (Örn: FC Kaplanlar)"
               value={clubName}
-              onChange={(e) => setClubName(e.target.value)}
+              onChange={e => setClubName(e.target.value)}
+              id="input-club-name"
             />
-            <button type="submit" className="cc-btn" disabled={!clubName.trim()}>Katıl</button>
+            <button type="submit" className="cc-btn" disabled={!clubName.trim()} id="btn-join-lobby">
+              Katıl
+            </button>
           </form>
         </div>
       ) : (
-        <div style={{ textAlign: 'right', marginBottom: '2rem' }}>
-          <button 
-            className="cc-btn" 
+        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            className={`cc-btn ${myP?.isReady ? '' : 'cc-btn-ready'}`}
             onClick={handleReady}
-            disabled={participants.find(p => p.id === myParticipantId)?.isReady || !participants.find(p => p.id === myParticipantId)?.clubId}
+            disabled={myP?.isReady || !myP?.clubId}
+            id="btn-mark-ready"
           >
-            {participants.find(p => p.id === myParticipantId)?.isReady ? 'Hazırsın ✓' : (!participants.find(p => p.id === myParticipantId)?.clubId ? 'Kulüp Kuruluyor...' : 'Hazırım!')}
+            {myP?.isReady ? '✓ Hazırsın' : (!myP?.clubId ? <><span className="cc-spinner" />Kulüp Kuruluyor...</> : 'Hazırım!')}
           </button>
         </div>
       )}
 
-      <div className="cc-card">
-        <h3 style={{ marginBottom: '1.5rem' }}>Katılımcılar ({participants.length}/6)</h3>
+      {/* Ready progress */}
+      <div className="cc-card" style={{ padding: '1.5rem' }}>
+        <div className="cc-ready-bar-wrap">
+          <div className="cc-ready-bar-label">
+            <span>Katılımcılar</span>
+            <span style={{ color: readyCount === participants.length && participants.length > 0 ? 'var(--accent)' : 'var(--text-secondary)' }}>
+              {readyCount} / {participants.length} Hazır
+            </span>
+          </div>
+          <div className="cc-ready-bar">
+            <div className="cc-ready-bar-fill" style={{ width: `${readyPct}%` }} />
+          </div>
+        </div>
+
         {participants.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>Henüz kimse katılmadı.</p>
+          <div className="cc-empty">
+            <div className="cc-empty-icon">👥</div>
+            <p className="cc-empty-text">Henüz kimse katılmadı</p>
+          </div>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <ul className="cc-participant-list">
             {participants.map(p => (
-              <li key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <span style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>{p.clubName}</span>
-                {p.isReady ? (
-                  <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>✓ Hazır</span>
-                ) : (
-                  <span style={{ color: 'var(--text-secondary)' }}>Bekleniyor...</span>
-                )}
+              <li key={p.id} className={`cc-participant-item ${p.isReady ? 'ready' : ''}`}>
+                <div className="cc-participant-avatar">
+                  {p.clubName.charAt(0).toUpperCase()}
+                </div>
+                <span className="cc-participant-name">{p.clubName}</span>
+                <div className={`cc-participant-badge ${p.isReady ? 'ready' : 'waiting'}`}>
+                  <div className={`cc-badge-dot ${p.isReady ? 'ready' : 'waiting'}`} />
+                  {p.isReady ? 'Hazır' : 'Bekleniyor'}
+                </div>
               </li>
             ))}
           </ul>
@@ -297,8 +386,7 @@ const Lobby = () => {
   );
 };
 
-import { draftApi, type Player, type DraftState } from './api/draftApi';
-
+// ─── DRAFT PAGE ───────────────────────────────────────────────────────────────
 const Draft = () => {
   const { roomId: shortCode } = useParams();
   const [draftSessionId, setDraftSessionId] = useState<string | null>(null);
@@ -306,45 +394,39 @@ const Draft = () => {
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isClaiming, setIsClaiming] = useState(false); // To prevent concurrent clicks
-  
-  // States for Filtering & Pagination
+  const [isClaiming, setIsClaiming] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('OVERALL_DESC');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 24;
   const MAX_ROSTER_SIZE = 20;
-  
-  // User & Room states
+
   const [myUserId] = useState(() => localStorage.getItem('myUserId') || crypto.randomUUID());
   useEffect(() => localStorage.setItem('myUserId', myUserId), [myUserId]);
-  
-  const [realRoomId, setRealRoomId] = useState<string>('');
-  const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
+
+  const [realRoomId, setRealRoomId] = useState('');
   const [myClubId, setMyClubId] = useState<string | null>(null);
 
-  // Lineup & Drag-Drop States
   const [lineup, setLineup] = useState<Record<string, string | null>>({});
-  const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
 
   const FORMATION_SLOTS = [
     { id: 'ST1', label: 'ST', top: '20%', left: '35%' },
     { id: 'ST2', label: 'ST', top: '20%', left: '65%' },
-    { id: 'LM', label: 'LM', top: '45%', left: '20%' },
+    { id: 'LM',  label: 'LM', top: '45%', left: '20%' },
     { id: 'CM1', label: 'CM', top: '48%', left: '40%' },
     { id: 'CM2', label: 'CM', top: '48%', left: '60%' },
-    { id: 'RM', label: 'RM', top: '45%', left: '80%' },
-    { id: 'LB', label: 'LB', top: '72%', left: '20%' },
+    { id: 'RM',  label: 'RM', top: '45%', left: '80%' },
+    { id: 'LB',  label: 'LB', top: '72%', left: '20%' },
     { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
     { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
-    { id: 'RB', label: 'RB', top: '72%', left: '80%' },
-    { id: 'GK', label: 'GK', top: '90%', left: '50%' },
+    { id: 'RB',  label: 'RB', top: '72%', left: '80%' },
+    { id: 'GK',  label: 'GK', top: '90%', left: '50%' },
   ];
 
   const handleDragStart = (e: React.DragEvent, playerId: string) => {
     e.dataTransfer.setData('playerId', playerId);
-    setDraggedPlayerId(playerId);
   };
 
   const handleDropToSlot = (e: React.DragEvent, slotId: string) => {
@@ -352,66 +434,69 @@ const Draft = () => {
     e.currentTarget.classList.remove('drag-over');
     const playerId = e.dataTransfer.getData('playerId');
     if (!playerId || !draftSessionId) return;
-    
     setLineup(prev => {
-        const newLineup = { ...prev };
-        Object.keys(newLineup).forEach(k => { if (newLineup[k] === playerId) newLineup[k] = null; });
-        newLineup[slotId] = playerId;
-        localStorage.setItem(`draft_lineup_${draftSessionId}`, JSON.stringify(newLineup));
-        return newLineup;
+      const nl = { ...prev };
+      Object.keys(nl).forEach(k => { if (nl[k] === playerId) nl[k] = null; });
+      nl[slotId] = playerId;
+      localStorage.setItem(`draft_lineup_${draftSessionId}`, JSON.stringify(nl));
+      return nl;
     });
-    setDraggedPlayerId(null);
   };
 
   const handleDropToBench = (e: React.DragEvent) => {
     e.preventDefault();
     const playerId = e.dataTransfer.getData('playerId');
     if (!playerId || !draftSessionId) return;
-    
     setLineup(prev => {
-        const newLineup = { ...prev };
-        Object.keys(newLineup).forEach(k => { if (newLineup[k] === playerId) newLineup[k] = null; });
-        localStorage.setItem(`draft_lineup_${draftSessionId}`, JSON.stringify(newLineup));
-        return newLineup;
+      const nl = { ...prev };
+      Object.keys(nl).forEach(k => { if (nl[k] === playerId) nl[k] = null; });
+      localStorage.setItem(`draft_lineup_${draftSessionId}`, JSON.stringify(nl));
+      return nl;
     });
-    setDraggedPlayerId(null);
   };
 
   useEffect(() => {
     const init = async () => {
-      try {
-        if (!shortCode) return;
-        const participantId = localStorage.getItem(`joined_${shortCode}`);
-        if (participantId) setMyParticipantId(participantId);
+      if (!shortCode) return;
+      const participantId = localStorage.getItem(`joined_${shortCode}`);
 
-        const room = await sessionApi.getRoomByCode(shortCode);
-        if (room && room.id) {
+      const fetchWithRetry = async <T,>(op: () => Promise<T>, retries = 3): Promise<T> => {
+        const delays = [500, 1000, 1500];
+        for (let i = 0; i < retries; i++) {
+          try { return await op(); }
+          catch (err: any) {
+            if (i === retries - 1) throw err;
+            await new Promise(r => setTimeout(r, delays[i]));
+          }
+        }
+        throw new Error('Unreachable');
+      };
+
+      try {
+        const room = await fetchWithRetry(() => sessionApi.getRoomByCode(shortCode));
+        if (room?.id) {
           setRealRoomId(room.id);
           setDraftSessionId(room.id);
-          
-          const fullRoom = await sessionApi.getRoom(room.id);
-          if (fullRoom && fullRoom.participants) {
-              const myP = fullRoom.participants.find(p => p.id === participantId);
-              if (myP && myP.clubId) {
-                  setMyClubId(myP.clubId);
-              }
+
+          const fullRoom = await fetchWithRetry(() => sessionApi.getRoom(room.id));
+          if (fullRoom?.participants) {
+            const myP = fullRoom.participants.find((p: Participant) => p.id === participantId);
+            if (myP?.clubId) setMyClubId(myP.clubId);
           }
-          
-          const poolData = await draftApi.getPool(room.id);
+
+          const poolData = await fetchWithRetry(() => draftApi.getPool(room.id));
           setPool(poolData || []);
-          
-          const stateData = await draftApi.getState(room.id);
+
+          const stateData = await fetchWithRetry(() => draftApi.getState(room.id));
           setDraftState(stateData);
-          
+
           const savedLineup = localStorage.getItem(`draft_lineup_${room.id}`);
           if (savedLineup) setLineup(JSON.parse(savedLineup));
-          
         } else {
           setError('Oda bulunamadı.');
         }
-      } catch (err) {
-        console.error(err);
-        setError('Draft verileri yüklenemedi.');
+      } catch {
+        setError('Draft verileri yüklenemedi. Lütfen sayfayı yenileyin.');
       } finally {
         setLoading(false);
       }
@@ -419,480 +504,411 @@ const Draft = () => {
     init();
   }, [shortCode]);
 
+  const draftSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { draftSessionIdRef.current = draftSessionId; }, [draftSessionId]);
+
+  const myClubIdRef = useRef<string | null>(null);
+  useEffect(() => { myClubIdRef.current = myClubId; }, [myClubId]);
+
+  const refreshFromBackend = useCallback(async () => {
+    const sessionId = draftSessionIdRef.current;
+    if (!sessionId) return;
+    try {
+      const [stateData, poolData] = await Promise.all([
+        draftApi.getState(sessionId),
+        draftApi.getPool(sessionId),
+      ]);
+      setDraftState(stateData);
+      setPool(poolData || []);
+      setIsClaiming(false);
+    } catch {
+      // Silent — next SignalR event will retry
+    }
+  }, []);
+
+  const prevMyClubIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (myClubId && prevMyClubIdRef.current === null) {
+      refreshFromBackend();
+    }
+    prevMyClubIdRef.current = myClubId;
+  }, [myClubId, refreshFromBackend]);
+
   const { isConnected } = useSignalR({
     roomId: realRoomId,
     userId: myUserId,
-    onDraftTurnAdvanced: (data) => {
-      console.log('SIGNALR EVENT: Turn advanced!', data);
-      setDraftState(prev => prev ? {
-        ...prev,
-        currentPickIndex: data.nextPickIndex,
-        currentClubId: data.nextClubId
-      } : null);
-    },
-    onPlayerClaimed: (data) => {
-      console.log('SIGNALR EVENT: Player claimed!', data);
-      setPool(prev => prev.map(p => 
-        p.playerId === data.playerId ? { ...p, isClaimed: true } : p
-      ));
-      
-      // Add the pick to draftState so the roster updates instantly
-      setDraftState(prev => {
-        if (!prev) return prev;
-        
-        // Prevent adding duplicate pick if already exists
-        if (prev.picks?.some(p => p.playerId === data.playerId)) {
-            return prev;
-        }
-
-        const newPick = {
-          pickNumber: data.pickNumber,
-          clubId: data.clubId,
-          playerId: data.playerId,
-          claimedAt: data.occurredOn || new Date().toISOString()
-        };
-        return {
-          ...prev,
-          picks: [...(prev.picks || []), newPick]
-        };
-      });
-    }
+    onDraftTurnAdvanced: () => refreshFromBackend(),
+    onPlayerClaimed: () => refreshFromBackend(),
   });
 
   const handleClaim = async (playerId: string) => {
     if (!draftSessionId || !myClubId || isClaiming || rosterCount >= MAX_ROSTER_SIZE) return;
-    
     setIsClaiming(true);
     try {
       await draftApi.claimPlayer(draftSessionId, myClubId, playerId);
-      // We rely on SignalR `onPlayerClaimed` to update state to ensure consistency across clients.
     } catch (err: any) {
-      console.error(err);
       const reason = err.response?.data?.reason || 'Bilinmeyen hata';
-      alert(`Oyuncu seçilemedi: ${reason}`);
-    } finally {
-      // Small delay to allow SignalR event to arrive before unlocking buttons
-      setTimeout(() => setIsClaiming(false), 300);
+      toast('error', `Oyuncu seçilemedi: ${reason}`);
+      setIsClaiming(false);
     }
   };
-  
-  // Calculate Roster
+
+  // ─── DERIVED STATE (single source of truth) ───────────────────────────────
   const myPicks = draftState?.picks?.filter(p => p.clubId === myClubId) || [];
   const rosterCount = myPicks.length;
-  
-  // Filtering & Sorting Logic
-  const getFilteredAndSortedPool = () => {
-    let filtered = pool;
-    
-    if (searchQuery.trim() !== '') {
-      filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    
-    if (positionFilter !== 'ALL') {
-      filtered = filtered.filter(p => p.position === positionFilter);
-    }
-    
-    // Create a copy of the array before sorting
-    filtered = [...filtered];
+  const allPickedPlayerIds = new Set((draftState?.picks || []).map(p => p.playerId));
+  const myPickedPlayerIds = new Set(myPicks.map(p => p.playerId));
+  const validLineup = Object.fromEntries(
+    Object.entries(lineup).map(([slot, pid]) => [slot, pid && myPickedPlayerIds.has(pid) ? pid : null])
+  );
+  const lineupCount = Object.values(validLineup).filter(Boolean).length;
 
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'OVERALL_DESC': return b.overall - a.overall;
-        case 'OVERALL_ASC': return a.overall - b.overall;
-        case 'AGE_ASC': return a.age - b.age;
-        case 'AGE_DESC': return b.age - a.age;
-        case 'VALUE_DESC': return b.marketValue - a.marketValue;
-        case 'VALUE_ASC': return a.marketValue - b.marketValue;
-        default: return b.overall - a.overall;
-      }
-    });
-    
-    return filtered;
-  };
+  // ─── FILTERING ────────────────────────────────────────────────────────────
+  const processedPool = (() => {
+    let f = pool;
+    if (searchQuery.trim()) f = f.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (positionFilter !== 'ALL') f = f.filter(p => p.position === positionFilter);
+    f = [...f];
+    switch (sortBy) {
+      case 'OVERALL_DESC': f.sort((a, b) => b.overall - a.overall); break;
+      case 'OVERALL_ASC':  f.sort((a, b) => a.overall - b.overall); break;
+      case 'AGE_ASC':      f.sort((a, b) => a.age - b.age); break;
+      case 'AGE_DESC':     f.sort((a, b) => b.age - a.age); break;
+      case 'VALUE_DESC':   f.sort((a, b) => b.marketValue - a.marketValue); break;
+      default:             f.sort((a, b) => b.overall - a.overall);
+    }
+    return f;
+  })();
 
-  const processedPool = getFilteredAndSortedPool();
   const totalPages = Math.ceil(processedPool.length / ITEMS_PER_PAGE);
   const paginatedPool = processedPool.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, positionFilter, sortBy]);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, positionFilter, sortBy]);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '4rem' }}>Yükleniyor...</div>;
-  if (error) return <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--danger)' }}>{error}</div>;
+  if (loading) return <Loader text="Draft Ekranı Hazırlanıyor..." />;
+  if (error) return (
+    <div className="cc-error-state">
+      <div style={{ fontSize: '3rem' }}>⚠</div>
+      <p>{error}</p>
+      <button className="cc-btn" onClick={() => window.location.reload()}>Yeniden Dene</button>
+    </div>
+  );
+
+  const isMyTurn = draftState?.currentClubId === myClubId && !!myClubId;
+  const isDraftComplete = rosterCount >= MAX_ROSTER_SIZE;
+
+  const turnText = isDraftComplete
+    ? 'Draft Tamamlandı'
+    : isMyTurn ? '🟢 Sende!'
+    : draftState?.currentClubId ? '⏳ Bekleniyor...'
+    : '🔌 Bağlanıyor...';
+
+  const turnClass = isDraftComplete ? 'complete' : isMyTurn ? 'my-turn' : draftState?.currentClubId ? 'waiting' : 'connecting';
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      
-      {/* HEADER PANEL */}
-      <div className="cc-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-            <h2>Draft Odası</h2>
-            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-              Sıra: <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>
-                {rosterCount >= MAX_ROSTER_SIZE ? 'Draft Tamamlandı' : (draftState?.currentClubId === myClubId ? 'Sende!' : (draftState?.currentClubId ? 'Bekleniyor...' : 'Bilinmiyor'))}
-              </span>
-            </p>
+    <div className="cc-draft">
+      {/* Turn Banner */}
+      <div className={`cc-turn-banner ${isMyTurn && !isDraftComplete ? 'my-turn' : isDraftComplete ? '' : 'waiting'}`}>
+        <div className="cc-turn-status">
+          <div className="cc-turn-icon">{isMyTurn && !isDraftComplete ? '⚡' : isDraftComplete ? '🏁' : '⏳'}</div>
+          <div>
+            <div className="cc-turn-label">Sıra Durumu</div>
+            <div className={`cc-turn-text ${turnClass}`}>{turnText}</div>
+          </div>
         </div>
-        
-        <div style={{ textAlign: 'right' }}>
-            <h3 style={{ fontSize: '1.5rem', margin: 0 }}>
-                Kadron: <span style={{ color: rosterCount >= MAX_ROSTER_SIZE ? 'var(--danger)' : 'var(--accent)' }}>
-                    {rosterCount} / {MAX_ROSTER_SIZE}
+
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <div className="cc-roster-counter">
+            <div>
+              <div className="cc-roster-label">Kadron</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                <span className="cc-roster-big" style={{ color: isDraftComplete ? 'var(--accent)' : 'var(--accent)' }}>
+                  {rosterCount}
                 </span>
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-              SignalR Bağlantısı: {isConnected ? <span style={{ color: 'var(--accent)' }}>Aktif</span> : <span style={{ color: 'var(--danger)' }}>Bağlanıyor...</span>}
-            </p>
+                <span style={{ color: 'var(--text-muted)', fontFamily: 'Rajdhani, sans-serif', fontWeight: 600 }}>/ {MAX_ROSTER_SIZE}</span>
+              </div>
+            </div>
+          </div>
+          <div className="cc-roster-counter">
+            <div>
+              <div className="cc-roster-label">İlk 11</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                <span className="cc-roster-big" style={{ color: lineupCount === FORMATION_SLOTS.length ? 'var(--accent)' : 'var(--text-secondary)', fontSize: '1.4rem' }}>
+                  {lineupCount}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontFamily: 'Rajdhani, sans-serif', fontWeight: 600 }}>/ {FORMATION_SLOTS.length}</span>
+              </div>
+            </div>
+          </div>
+          <div className="cc-nav-signal">
+            <div className={`cc-signal-dot ${isConnected ? 'connected' : ''}`} />
+          </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
-          
-        {/* MAIN POOL AREA */}
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+        {/* ─── LEFT: POOL ─── */}
         <div style={{ flex: '1', minWidth: 0 }}>
-            {/* FILTERS */}
-            <div className="cc-card" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', padding: '1rem' }}>
-                <input 
-                    type="text" 
-                    className="cc-input" 
-                    placeholder="Oyuncu Ara..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ flex: '1', minWidth: '200px' }}
-                />
-                
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
-                        <button 
-                            key={pos}
-                            onClick={() => setPositionFilter(pos)}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: '4px',
-                                backgroundColor: positionFilter === pos ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
-                                color: positionFilter === pos ? '#000' : 'var(--text-primary)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                cursor: 'pointer',
-                                fontWeight: positionFilter === pos ? 'bold' : 'normal'
-                            }}
-                        >
-                            {pos === 'ALL' ? 'Tümü' : pos}
-                        </button>
-                    ))}
-                </div>
-                
-                <select 
-                    className="cc-input" 
-                    value={sortBy} 
-                    onChange={(e) => setSortBy(e.target.value)}
-                    style={{ width: 'auto' }}
+          {/* Filters */}
+          <div className="cc-filters">
+            <input
+              type="text"
+              className="cc-input"
+              placeholder="🔍  Oyuncu ara..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ flex: '1', minWidth: '180px' }}
+              id="draft-search"
+            />
+            <div className="cc-pos-filter-group">
+              {(['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const).map(pos => (
+                <button
+                  key={pos}
+                  onClick={() => setPositionFilter(pos)}
+                  className={`cc-pos-pill ${positionFilter === pos ? `active-${pos}` : ''}`}
+                  id={`filter-${pos}`}
                 >
-                    <option value="OVERALL_DESC">Overall (Yüksek → Düşük)</option>
-                    <option value="OVERALL_ASC">Overall (Düşük → Yüksek)</option>
-                    <option value="AGE_ASC">Yaş (Genç → Yaşlı)</option>
-                    <option value="AGE_DESC">Yaş (Yaşlı → Genç)</option>
-                    <option value="VALUE_DESC">Değer (Yüksek → Düşük)</option>
-                </select>
+                  {pos === 'ALL' ? 'Tümü' : pos}
+                </button>
+              ))}
             </div>
-            
-            {/* GRID */}
-            {processedPool.length === 0 ? (
-                <div className="cc-card" style={{ textAlign: 'center', padding: '3rem' }}>
-                    <p style={{ color: 'var(--text-secondary)' }}>Kriterlere uygun oyuncu bulunamadı.</p>
-                </div>
-            ) : (
-                <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
-                        {paginatedPool.map(player => (
-                          <div key={player.playerId} style={{ 
-                            backgroundColor: player.isClaimed ? 'rgba(0,0,0,0.5)' : 'var(--bg-card)',
-                            border: '1px solid rgba(255,255,255,0.05)',
-                            borderRadius: '8px',
-                            padding: '1rem',
-                            textAlign: 'center',
-                            opacity: player.isClaimed ? 0.4 : 1,
-                            position: 'relative',
-                            transition: 'all 0.2s',
-                          }}>
-                            {player.isClaimed && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '10px', right: '10px',
-                                    backgroundColor: 'var(--danger)',
-                                    color: '#fff',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 'bold'
-                                }}>
-                                    SEÇİLDİ
-                                </div>
-                            )}
-                            
-                            <div style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '0.5rem', color: 'var(--accent)' }}>
-                              {player.overall}
-                            </div>
-                            <h3 style={{ marginBottom: '0.2rem', fontSize: '1.1rem' }}>{player.name}</h3>
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                              <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{player.position}</span> | Yaş: {player.age} <br/>
-                              <span style={{ fontSize: '0.8rem' }}>€{(player.marketValue / 1000000).toFixed(1)}M</span>
-                            </p>
-                            <button 
-                              className="cc-btn" 
-                              onClick={() => handleClaim(player.playerId)}
-                              disabled={player.isClaimed || draftState?.currentClubId !== myClubId || rosterCount >= MAX_ROSTER_SIZE || isClaiming}
-                              style={{ 
-                                width: '100%', 
-                                padding: '0.5rem',
-                                backgroundColor: (player.isClaimed || rosterCount >= MAX_ROSTER_SIZE || isClaiming) ? 'rgba(255,255,255,0.1)' : (draftState?.currentClubId !== myClubId ? 'rgba(255,255,255,0.05)' : 'var(--accent)'),
-                                color: (player.isClaimed || draftState?.currentClubId !== myClubId || rosterCount >= MAX_ROSTER_SIZE || isClaiming) ? 'var(--text-secondary)' : '#000',
-                                cursor: (player.isClaimed || draftState?.currentClubId !== myClubId || rosterCount >= MAX_ROSTER_SIZE || isClaiming) ? 'not-allowed' : 'pointer',
-                                border: 'none'
-                              }}
-                            >
-                              {player.isClaimed ? 'Seçildi' : (isClaiming ? 'Bekle...' : 'Seç')}
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                    
-                    {/* PAGINATION */}
-                    {totalPages > 1 && (
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
-                            <button 
-                                className="cc-btn"
-                                disabled={currentPage === 1}
-                                onClick={() => setCurrentPage(p => p - 1)}
-                                style={{ padding: '0.5rem 1rem' }}
-                            >
-                                Önceki
-                            </button>
-                            <span style={{ color: 'var(--text-secondary)' }}>
-                                Sayfa {currentPage} / {totalPages}
-                            </span>
-                            <button 
-                                className="cc-btn"
-                                disabled={currentPage === totalPages}
-                                onClick={() => setCurrentPage(p => p + 1)}
-                                style={{ padding: '0.5rem 1rem' }}
-                            >
-                                Sonraki
-                            </button>
-                        </div>
-                    )}
-                </>
-            )}
-        </div>
-        
-        {/* RIGHT PANEL - LINEUP PITCH & BENCH */}
-        <div style={{ width: '400px', flexShrink: 0, position: 'sticky', top: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            
-            {/* PITCH */}
-            <div className="cc-card" style={{ padding: '1.5rem 1rem' }}>
-                <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.8rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>İlk 11</span>
-                    <span style={{ color: rosterCount >= MAX_ROSTER_SIZE ? 'var(--danger)' : 'var(--accent)', fontSize: '1rem' }}>{rosterCount}/{MAX_ROSTER_SIZE} Seçim</span>
-                </h3>
-                
-                <div className="pitch-container">
-                    <div className="pitch-lines"></div>
-                    <div className="penalty-box-top"></div>
-                    <div className="penalty-box-bottom"></div>
-                    
-                    {FORMATION_SLOTS.map(slot => {
-                        const filledPlayerId = lineup[slot.id];
-                        const player = pool.find(p => p.playerId === filledPlayerId);
-                        
-                        return (
-                            <div 
-                                key={slot.id}
-                                className={`pitch-slot ${player ? 'filled' : ''}`}
-                                style={{ top: slot.top, left: slot.left }}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    e.currentTarget.classList.add('drag-over');
-                                }}
-                                onDragLeave={(e) => {
-                                    e.currentTarget.classList.remove('drag-over');
-                                }}
-                                onDrop={(e) => handleDropToSlot(e, slot.id)}
-                            >
-                                {player ? (
-                                    <div 
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, player.playerId)}
-                                        className="player-draggable"
-                                        style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        <div style={{ color: 'var(--accent)', fontWeight: '900', fontSize: '1.2rem', lineHeight: '1' }}>{player.overall}</div>
-                                        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '90%', textAlign: 'center', marginTop: '2px' }}>
-                                            {player.name.split(' ').pop()}
-                                        </div>
-                                        <div className="slot-label" style={{ marginTop: '2px', opacity: 0.8 }}>{slot.label}</div>
-                                    </div>
-                                ) : (
-                                    <span className="slot-label">{slot.label}</span>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* BENCH */}
-            <div 
-                className="cc-card" 
-                style={{ padding: '1rem', minHeight: '150px' }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDropToBench}
+            <select
+              className="cc-input"
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              style={{ width: 'auto', flex: 'none' }}
+              id="draft-sort"
             >
-                <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.8rem', marginBottom: '1rem' }}>
-                    Yedekler / Atanmamış
-                </h3>
-                
-                {rosterCount === 0 ? (
-                    <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0', fontSize: '0.9rem' }}>
-                        Henüz hiç oyuncu seçmedin.
-                    </p>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-                        {myPicks.map((pick) => {
-                            const isPlaced = Object.values(lineup).includes(pick.playerId);
-                            if (isPlaced) return null; // Only show players not in the lineup
-                            
-                            const player = pool.find(p => p.playerId === pick.playerId);
-                            if (!player) return null;
-                            
-                            return (
-                                <div 
-                                    key={pick.playerId}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, player.playerId)}
-                                    className="player-draggable"
-                                    style={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '0.6rem', 
-                                        backgroundColor: 'rgba(255,255,255,0.03)',
-                                        borderRadius: '6px',
-                                        borderLeft: `3px solid var(--accent)`
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{player.name}</span>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{player.position}</span>
-                                    </div>
-                                    <div style={{ 
-                                        backgroundColor: 'rgba(0,0,0,0.5)', 
-                                        padding: '0.2rem 0.5rem', 
-                                        borderRadius: '4px',
-                                        fontWeight: 'bold',
-                                        color: 'var(--accent)'
-                                    }}>
-                                        {player.overall}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        
-                        {myPicks.length > 0 && myPicks.every(pick => Object.values(lineup).includes(pick.playerId)) && (
-                            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem 0', fontSize: '0.85rem' }}>
-                                Tüm oyuncular sahada.
-                            </p>
-                        )}
-                    </div>
-                )}
+              <option value="OVERALL_DESC">Overall ↓</option>
+              <option value="OVERALL_ASC">Overall ↑</option>
+              <option value="AGE_ASC">Yaş ↑</option>
+              <option value="AGE_DESC">Yaş ↓</option>
+              <option value="VALUE_DESC">Değer ↓</option>
+            </select>
+          </div>
+
+          {/* Grid */}
+          {processedPool.length === 0 ? (
+            <div className="cc-card cc-empty">
+              <div className="cc-empty-icon">🔍</div>
+              <p className="cc-empty-text">Kriterlere uygun oyuncu bulunamadı.</p>
             </div>
+          ) : (
+            <>
+              <div className="cc-player-grid">
+                {paginatedPool.map(player => {
+                  const claimed = allPickedPlayerIds.has(player.playerId);
+                  const canClaim = isMyTurn && !claimed && !isClaiming && rosterCount < MAX_ROSTER_SIZE;
+
+                  return (
+                    <div
+                      key={player.playerId}
+                      className={`cc-player-card ${claimed ? 'claimed' : ''}`}
+                    >
+                      <div
+                        className="cc-player-overall"
+                        style={{ color: overallColor(player.overall) }}
+                      >
+                        {player.overall}
+                      </div>
+                      <PosBadge pos={player.position} />
+                      <div className="cc-player-name">{player.name}</div>
+                      <div className="cc-player-meta">
+                        <span>{player.age}</span> yaş &nbsp;·&nbsp; €<span>{(player.marketValue / 1_000_000).toFixed(1)}M</span>
+                      </div>
+                      <button
+                        className={`cc-claim-btn ${
+                          claimed ? 'taken' :
+                          isClaiming ? 'loading' :
+                          canClaim ? 'available' : 'not-turn'
+                        }`}
+                        onClick={() => canClaim && handleClaim(player.playerId)}
+                        disabled={claimed || !isMyTurn || isClaiming || rosterCount >= MAX_ROSTER_SIZE}
+                        id={`claim-${player.playerId}`}
+                      >
+                        {claimed ? 'Seçildi' : isClaiming ? 'Bekle...' : canClaim ? 'Seç' : '—'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="cc-pagination">
+                  <button
+                    className="cc-btn cc-btn-ghost"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >← Önceki</button>
+                  <span className="cc-pagination-info">Sayfa {currentPage} / {totalPages}</span>
+                  <button
+                    className="cc-btn cc-btn-ghost"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >Sonraki →</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ─── RIGHT: PITCH & BENCH ─── */}
+        <div style={{ width: '340px', flexShrink: 0, position: 'sticky', top: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Pitch */}
+          <div className="cc-card" style={{ padding: '1.25rem 1rem' }}>
+            <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', fontSize: '1.1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <span>İlk 11</span>
+              <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '0.85rem', color: lineupCount === FORMATION_SLOTS.length ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                {lineupCount}/{FORMATION_SLOTS.length}
+              </span>
+            </h3>
+            <div className="pitch-container">
+              <div className="pitch-lines" />
+              <div className="penalty-box-top" />
+              <div className="penalty-box-bottom" />
+              {FORMATION_SLOTS.map(slot => {
+                const filledPlayerId = validLineup[slot.id];
+                const player = pool.find(p => p.playerId === filledPlayerId);
+                return (
+                  <div
+                    key={slot.id}
+                    className={`pitch-slot ${player ? 'filled' : ''}`}
+                    style={{ top: slot.top, left: slot.left }}
+                    onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+                    onDragLeave={e => e.currentTarget.classList.remove('drag-over')}
+                    onDrop={e => handleDropToSlot(e, slot.id)}
+                  >
+                    {player ? (
+                      <div
+                        draggable
+                        onDragStart={e => handleDragStart(e, player.playerId)}
+                        className="player-draggable"
+                        style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <div style={{ fontFamily: 'Orbitron, sans-serif', color: overallColor(player.overall), fontWeight: 900, fontSize: '1rem', lineHeight: 1 }}>
+                          {player.overall}
+                        </div>
+                        <div style={{ fontSize: '0.6rem', fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', width: '90%', textAlign: 'center', marginTop: '2px', color: 'var(--text-primary)' }}>
+                          {player.name.split(' ').pop()}
+                        </div>
+                        <div className="slot-label" style={{ marginTop: '2px' }}>{slot.label}</div>
+                      </div>
+                    ) : (
+                      <span className="slot-label">{slot.label}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bench */}
+          <div
+            className="cc-card"
+            style={{ padding: '1.25rem 1rem', minHeight: '120px' }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={handleDropToBench}
+          >
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '0.85rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              Yedekler
+            </h3>
+            {rosterCount === 0 ? (
+              <div className="cc-empty" style={{ padding: '1.5rem 0' }}>
+                <p className="cc-empty-text">Henüz oyuncu seçmedin</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
+                {myPicks.map(pick => {
+                  const isPlaced = Object.values(validLineup).includes(pick.playerId);
+                  if (isPlaced) return null;
+                  const player = pool.find(p => p.playerId === pick.playerId);
+                  if (!player) return null;
+                  return (
+                    <div
+                      key={pick.playerId}
+                      draggable
+                      onDragStart={e => handleDragStart(e, player.playerId)}
+                      className="cc-bench-item player-draggable"
+                    >
+                      <span className="cc-bench-overall">{player.overall}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{player.name}</div>
+                        <div style={{ fontSize: '0.7rem' }}><PosBadge pos={player.position} /></div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {myPicks.length > 0 && myPicks.every(pick => Object.values(lineup).includes(pick.playerId)) && (
+                  <p style={{ color: 'var(--accent)', textAlign: 'center', fontSize: '0.85rem', padding: '0.5rem 0' }}>
+                    ✓ Tüm oyuncular sahada
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-const SeasonDashboard = () => {
-  const { roomId } = useParams();
-  return (
-    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-      <div className="cc-card">
-        <h2>Sezon Dashboard</h2>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>Haftalık kararlarınızı verin.</p>
-      </div>
+// ─── PLACEHOLDER PAGES ────────────────────────────────────────────────────────
+const PlaceholderPage = ({ title, icon, desc }: { title: string; icon: string; desc: string }) => (
+  <div style={{ maxWidth: '700px', margin: '4rem auto', padding: '0 1rem' }}>
+    <div className="cc-card" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+      <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>{icon}</div>
+      <h2 style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{title}</h2>
+      <p style={{ color: 'var(--text-secondary)' }}>{desc}</p>
     </div>
-  );
-};
+  </div>
+);
 
-const Sponsorship = () => {
-  const { roomId } = useParams();
-  return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <div className="cc-card">
-        <h2>Sponsorluk Teklifleri</h2>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>Gelen teklifleri değerlendirin.</p>
-      </div>
-    </div>
-  );
-};
-
-const Summary = () => {
-  const { roomId } = useParams();
-  return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <div className="cc-card">
-        <h2>Sezon Sonu Özeti</h2>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>Kazananlar ve istatistikler.</p>
-      </div>
-    </div>
-  );
-};
-
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
 const Navigation = () => {
   const location = useLocation();
-  const isActive = (path: string) => location.pathname.startsWith(path);
-
-  const linkStyle = (path: string) => ({
-    color: isActive(path) && path !== '/' ? 'var(--accent)' : 'var(--text-primary)',
-    fontWeight: isActive(path) && path !== '/' ? '600' : '400',
-    borderBottom: isActive(path) && path !== '/' ? '2px solid var(--accent)' : '2px solid transparent',
-    paddingBottom: '0.25rem',
-    transition: 'all 0.2s',
-    fontFamily: 'Rajdhani, sans-serif',
-    fontSize: '1.2rem',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '1px'
-  });
+  const isActive = (path: string) => location.pathname.startsWith(path) && path !== '/';
 
   return (
-    <nav style={{ backgroundColor: 'var(--bg-card)', padding: '1rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '1200px', margin: '0 auto' }}>
-        <Link to="/" style={{ fontSize: '1.5rem', fontWeight: 'bold', fontFamily: 'Rajdhani, sans-serif' }}>
-          CLUB<span style={{ color: 'var(--accent)' }}>CRAFT</span>
+    <nav className="cc-nav">
+      <div className="cc-nav-inner">
+        <Link to="/" className="cc-nav-logo">
+          CLUB<span>CRAFT</span>
         </Link>
-        <ul style={{ display: 'flex', gap: '2rem', listStyle: 'none', margin: 0, padding: 0 }}>
-          <li><Link to="/lobby/TIGER42" style={linkStyle('/lobby')}>Lobi</Link></li>
-          <li><Link to="/draft/TIGER42" style={linkStyle('/draft')}>Draft</Link></li>
-          <li><Link to="/season/TIGER42" style={linkStyle('/season')}>Sezon</Link></li>
-          <li><Link to="/sponsorship/TIGER42" style={linkStyle('/sponsorship')}>Sponsorluk</Link></li>
-          <li><Link to="/summary/TIGER42" style={linkStyle('/summary')}>Özet</Link></li>
+        <ul className="cc-nav-links">
+          {[
+            { to: '/lobby', label: 'Lobi' },
+            { to: '/draft', label: 'Draft' },
+            { to: '/season', label: 'Sezon' },
+            { to: '/sponsorship', label: 'Sponsorluk' },
+            { to: '/summary', label: 'Özet' },
+          ].map(({ to, label }) => (
+            <li key={to}>
+              <Link to={`${to}/TIGER42`} className={`cc-nav-link ${isActive(to) ? 'active' : ''}`}>
+                {label}
+              </Link>
+            </li>
+          ))}
         </ul>
       </div>
     </nav>
   );
 };
 
+// ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
   return (
     <BrowserRouter>
       <Navigation />
+      <ToastContainer />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/lobby/:roomId" element={<Lobby />} />
         <Route path="/draft/:roomId" element={<Draft />} />
-        <Route path="/season/:roomId" element={<SeasonDashboard />} />
-        <Route path="/sponsorship/:roomId" element={<Sponsorship />} />
-        <Route path="/summary/:roomId" element={<Summary />} />
+        <Route path="/season/:roomId" element={<PlaceholderPage title="Sezon Dashboard" icon="📊" desc="Haftalık kararlarınızı verin, fikstürü takip edin." />} />
+        <Route path="/sponsorship/:roomId" element={<PlaceholderPage title="Sponsorluk Teklifleri" icon="🤝" desc="Gelen teklifleri değerlendirin." />} />
+        <Route path="/summary/:roomId" element={<PlaceholderPage title="Sezon Sonu Özeti" icon="🏆" desc="Kazananlar ve istatistikler." />} />
       </Routes>
     </BrowserRouter>
   );
