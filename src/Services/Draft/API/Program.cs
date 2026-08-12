@@ -18,6 +18,15 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials());
+});
+
 // --- 1. EF Core & Database ---
 builder.Services.AddDbContext<DraftDbContext>(options =>
 {
@@ -94,6 +103,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors("FrontendPolicy");
 app.MapControllers();
 
 app.Run();

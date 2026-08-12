@@ -7,6 +7,15 @@ using MassTransit;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials());
+});
+
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -51,6 +60,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseCors("FrontendPolicy");
 app.UseHttpsRedirection();
 
 // Minimal APIs
