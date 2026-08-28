@@ -607,6 +607,68 @@ ve git geçmişinde ayrı ayrı okunabilir olmalı:
 > aralıklı polling kullanıyor. İstenirse ileride gerçek bir event zinciri
 > (FinanceSponsorship → RealtimeHub → `onSponsorshipOffered`) eklenebilir.
 
+### 4 haftalık ilerletme testinde bulunan 3 bug (2026-08-28)
+
+**Bug A — Hafta ilerleme/maç simülasyonu tutarsız — İKİ bağımsız kök sebep:**
+1. `RoundRobinFixtureGenerator` sadece **tek** bir round-robin turu üretiyordu
+   (`teams.Count - 1` hafta) — 2 kulüp için bu tam 1 hafta demekti, oysa
+   sezon 10-14 hafta sürüyor. Round bitince o haftalar için hiç `Match`
+   satırı kalmıyordu. **Düzeltme:** `SeasonLengthWeeks=14`'e kadar döngü
+   tekrarlanıyor (double/triple round-robin gibi).
+2. `GameRoom.MarkReady(WeekAdvance)`, `AllParticipantsReadyForNextWeekEvent`'i
+   yayınladıktan sonra ready flag'lerini sıfırlamıyor ve `CurrentWeek`'i hemen
+   ilerletmiyordu — bu, MatchEngine'in simülasyonu bitirip
+   `WeekSimulationCompletedEvent` ile bildirmesini bekleyen asenkron bir adım
+   (`AdvanceWeek()`'te gerçekleşiyor). Bu pencerede `ready()` tekrar
+   çağrılırsa (hızlı üst üste tıklama, network gecikmesi), event **aynı**
+   hafta numarasıyla ikinci kez ateşleniyor; MatchEngine o haftayı tekrar
+   simüle etmeye çalışıyor (maç zaten oynanmış, hiçbir şey yapmıyor) ama her
+   iki `WeekSimulationCompletedEvent` de kendi `AdvanceWeek()`'ini
+   tetiklediği için `CurrentWeek` net 2 artıyor — bir hafta hiç maç
+   oynanmadan atlanıyor. **Düzeltme:** yeni `WeekAdvancePending` flag'i
+   (migration gerektirdi), bir hafta ilerletme "uçuştayken" yenisinin
+   tetiklenmesini engelliyor. `SimulateMatchesForWeekCommandHandler`'a da
+   savunma amaçlı bir uyarı logu eklendi (fikstürde o hafta için hiç maç
+   yoksa artık sessizce geçilmiyor).
+   **Doğrulama:** rapid-fire iki ready-check döngüsü sonrası DB'de Week 1
+   VE Week 2'nin ikisi de `IsPlayed=true`, hiçbir "hiç maç yok" uyarısı
+   tetiklenmedi.
+
+**Bug B — Türkçe karakter bozukluğu:** `index.html`'de `<meta charset=UTF-8>`
+zaten vardı, API yanıtları da zaten `charset=utf-8` dönüyordu — config
+eksikliği değildi. `SeasonDashboard.tsx`'te 5 string, önceki bir "UI Polish"
+turunda bozuk encoding ile kaydedilmiş, U+FFFD/literal `??` olarak **geri
+kurtarılamaz** şekilde kaybolmuştu. Metinler elle doğru Türkçe'ye geri
+yazıldı (transkripsiyon değil, çünkü orijinal baytlar kalıcı olarak yoktu).
+
+**Bug C — Sponsorluk hiç tetiklenmiyor:** `ClubReputation.AddReputation()`,
+eşik aşıldığında `ReputationThresholdReachedEvent`'i aggregate'in dahili
+domain event listesine ekliyor ama bunu okuyup publish etmek **çağıranın**
+sorumluluğunda (`ClubReputationRepository.SaveAsync` bunu kendisi yapmıyor).
+Üç tüketiciden sadece `MatchSimulatedEventConsumer` bunu doğru yapıyordu;
+`PlayerAddedToRosterEventConsumer` ve `WeeklyDecisionMadeEventConsumer` ise
+domain event'leri hiç okumadan direkt `SaveAsync`'e geçiyordu — event
+sessizce kayboluyordu. Hasan FC vakasında itibar roster-ekleme + haftalık
+karar bonuslarından 50'yi geçmişti, tam da bu iki kırık yoldan. **Bonus
+tespit:** `WeeklyDecisionMadeEventConsumer`'daki `msg.Type == 1` kontrolü
+StadiumInvestment sanılıyordu ama gerçek enum'da (`HireCoach=1,
+StadiumInvestment=2`) bu HireCoach'a karşılık geliyordu — düzeltildi
+(`Type==2`). **Doğrulama (manuel DB müdahalesi OLMADAN, tamamen organik):**
+yeni bir kulüp roster + `StadiumInvestment` kararlarıyla itibarı 51'e
+ulaştırdı → Finance loglarında "Created sponsorship offer ... threshold 50"
+→ `GET /api/finances/{clubId}/offers` gerçek bir Pending teklif döndürdü →
+Sponsorluk ekranında ekran görüntüsüyle kanıtlandı, kabul sonrası bütçenin
+DB'de arttığı teyit edildi.
+
+**Ek iyileştirmeler:** Match Engine'e `/api/matches/{roomId}/fixture`
+endpoint'i eklendi; Sezon Dashboard'a **Maç Geçmişi** (kullanıcının kendi
+kulübünün oynadığı maçlar: hafta/rakip/skor/G-B-M) ve **Fikstür** (önümüzdeki
+haftaların tüm eşleşmeleri) panelleri eklendi. Ayrıca sponsorluk kabul
+akışında bir eventual-consistency detayı bulundu: bütçe kredisi
+`ISponsorshipAcceptedEvent` üzerinden asenkron işlendiği için tek seferlik
+hemen-sonrası fetch bazen krediden önce yetişip eski bütçeyi gösterebiliyordu
+— polling ve kısa gecikmeli tekrar denemelerle düzeltildi.
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
