@@ -568,6 +568,45 @@ ve git geçmişinde ayrı ayrı okunabilir olmalı:
 - `fix(frontend): resolve real RoomId on Season Dashboard before API calls`
 - `feat(scripts): auto-run EF migrations before starting services`
 
+**Sponsorluk ve Özet ekranları — TAMAMLANDI (2026-08-28):**
+- **Sponsorluk** (`/sponsorship/:shortCode`) — bekleyen tekliflerin kartlar
+  halinde gösterimi, kabul/red akışı, kabul sonrası bütçenin taze veriyle
+  anında güncellenmesi, geçmiş kararlar listesi. Playwright ile hem kabul
+  hem red akışı uçtan uca doğrulandı (DB'den bütçe artışı teyit edildi).
+- **Özet** (`/summary/:shortCode`) — Başkanlık Skoru = (Lig Puanı × 10) +
+  İtibar Skoru + (Bütçe ÷ 50.000), tüm kulüpler için hesaplanıp sıralanıyor;
+  sezon bitince (`CurrentWeek >= 14`) lider "🏆 Şampiyon" olarak vurgulanıyor.
+
+> 🎯 **Kök sebep bulundu ve kapatıldı (Sponsorluk/Özet ekranları için standings
+> doğrulanırken ortaya çıktı):** `IPlayerAddedToRosterEvent` hiç `RoomId`
+> taşımıyordu. MatchEngine'in `PlayerAddedToRosterCommandConsumer`'ı,
+> `ClubPowerRating`'i lazy-create ederken `RoomId` için sabit `Guid.Empty`
+> kullanıyordu — `GetStandingsQueryHandler`'ın oda bazlı filtrelediği sorgu
+> hiçbir zaman eşleşmiyordu, **standings her zaman boş dönüyordu**. Bu, Season
+> Dashboard'daki lig tablosunun ta baştan beri sessizce boş görünmesine sebep
+> olmuştu ama fark edilmemişti (o testte lig tablosu odak noktası değildi).
+> Zincir boyunca düzeltildi: `Club` aggregate (RoomId zaten vardı) →
+> `PlayerAddedToRosterEvent` domain event → `IPlayerAddedToRosterEvent`
+> contract → iki ayrı publish noktası → MatchEngine consumer artık
+> `msg.RoomId` kullanıyor. **Bonus tespit:** `ClubRepository.SaveAsync` ve
+> `PublishDomainEventsInterceptor`, aynı domain event'leri entegrasyon
+> event'ine çevirmek için birbirinden bağımsız iki paralel switch-case
+> barındırıyor — biri (`ClubRepository`) fiilen çalışıyor (domain event'leri
+> `SaveChangesAsync`'ten önce temizliyor), diğeri (interceptor) bu akış için
+> hiçbir zaman tetiklenmiyor. İleride tek bir mekanizmaya birleştirilmeli.
+> **Ders:** Bir integration event contract'ı tasarlanırken, event'i tüketen
+> her servisin ihtiyaç duyacağı alanların (burada RoomId) baştan düşünülmesi
+> gerekiyor — eksik bir alan, tüketen tarafta sessizce yanlış bir varsayılan
+> değere (`Guid.Empty` gibi) düşebilir ve bu, ilgili özelliği görünür kılan
+> bir ekran inşa edilene kadar fark edilmeyebilir.
+
+> 💡 **RealtimeHub kapsam notu:** Sponsorluk teklifi oluşturma zinciri
+> (`ReputationThresholdReachedEventConsumer`) yeni bir integration event
+> yayınlamıyor, dolayısıyla RealtimeHub'da `SponsorshipOffered` diye bir
+> consumer/event de yok. Sponsorluk ekranı bu yüzden SignalR yerine kısa
+> aralıklı polling kullanıyor. İstenirse ileride gerçek bir event zinciri
+> (FinanceSponsorship → RealtimeHub → `onSponsorshipOffered`) eklenebilir.
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
