@@ -1,11 +1,12 @@
 using MediatR;
 using ClubCraft.ClubManagement.Application.Repositories;
+using ClubCraft.BuildingBlocks.Common.Enums;
 
 namespace ClubCraft.ClubManagement.Application.Commands.AddPlayerToRoster;
 
-// Note: No specific Result type returned because this is invoked via Saga 
+// Note: No specific Result type returned because this is invoked via Saga
 // and communicates its result via Outbox domain events.
-public record AddPlayerToRosterCommand(Guid ClubId, Guid PlayerId, string Name, string Position, int Overall, int Age, decimal MarketValue, Guid PickAttemptId) : IRequest;
+public record AddPlayerToRosterCommand(Guid ClubId, Guid PlayerId, string Name, PlayerPosition Position, int Overall, int Age, decimal MarketValue, Guid PickAttemptId) : IRequest;
 
 public class AddPlayerToRosterCommandHandler : IRequestHandler<AddPlayerToRosterCommand>
 {

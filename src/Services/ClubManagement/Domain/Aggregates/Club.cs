@@ -1,4 +1,5 @@
 using ClubCraft.BuildingBlocks.Common.SeedWork;
+using ClubCraft.BuildingBlocks.Common.Enums;
 using ClubCraft.ClubManagement.Domain.Entities;
 using ClubCraft.ClubManagement.Domain.Enums;
 using ClubCraft.ClubManagement.Domain.Events;
@@ -14,6 +15,7 @@ public class Club : AggregateRoot<Guid>
     public string Name { get; private set; } = string.Empty;
     public Money Budget { get; private set; } = Money.Zero;
     public string LineupJson { get; private set; } = "{}";
+    public string Formation { get; private set; } = "4-4-2";
     
     private readonly List<Player> _roster = new();
     public IReadOnlyCollection<Player> Roster => _roster.AsReadOnly();
@@ -38,7 +40,7 @@ public class Club : AggregateRoot<Guid>
         AddDomainEvent(new ClubInitializedEvent(Id, RoomId, PresidentUserId, Name, initialBudget, ParticipantId));
     }
 
-    public void AddPlayerToRoster(Guid playerId, string name, string position, int overall, int age, decimal marketValue, Guid pickAttemptId)
+    public void AddPlayerToRoster(Guid playerId, string name, PlayerPosition position, int overall, int age, decimal marketValue, Guid pickAttemptId)
     {
         if (_roster.Any(p => p.Id == playerId))
         {
@@ -111,6 +113,22 @@ public class Club : AggregateRoot<Guid>
     public void UpdateLineup(string lineupJson)
     {
         LineupJson = lineupJson;
+    }
+
+    public void UpdateFormation(string formation)
+    {
+        // Gecerli formasyon kodlarinin tam listesi frontend'de tanimli (bkz.
+        // FORMATIONS sabiti, SeasonDashboard.tsx) — burada sadece bos deger
+        // reddediliyor, tam validasyon frontend'in sundugu sabit secenek
+        // listesiyle zaten garanti altinda.
+        if (string.IsNullOrWhiteSpace(formation))
+            throw new InvalidOperationException("Formation bos olamaz.");
+
+        Formation = formation;
+        // Formasyon degisince eski lineup'in slot ID'leri (orn. eski formasyonun
+        // "CM1"i yeni formasyonda yok) artik anlamli olmayabilir — lineup'i
+        // temizliyoruz, kullanici yeni formasyona oyuncularini yeniden diziyor.
+        LineupJson = "{}";
     }
 
     private static decimal GetDecisionCost(WeeklyDecisionType type)

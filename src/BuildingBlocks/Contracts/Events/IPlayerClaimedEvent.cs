@@ -1,3 +1,5 @@
+using ClubCraft.BuildingBlocks.Common.Enums;
+
 namespace ClubCraft.BuildingBlocks.Contracts.Events;
 
 public interface IPlayerClaimedEvent
@@ -8,7 +10,7 @@ public interface IPlayerClaimedEvent
     Guid PlayerId { get; }
     int PickNumber { get; }
     string Name { get; }
-    string Position { get; }
+    PlayerPosition Position { get; }
     int Overall { get; }
     int Age { get; }
     decimal MarketValue { get; }

@@ -39,7 +39,7 @@ public class ClubDbContext : DbContext
                 p.HasKey("Id");
                 p.Property("Id").ValueGeneratedNever();
                 p.Property("Name").IsRequired();
-                p.Property("Position").IsRequired();
+                p.Property<ClubCraft.BuildingBlocks.Common.Enums.PlayerPosition>("Position").IsRequired().HasConversion<string>();
                 p.Property("Overall");
                 p.Property("Age");
                 p.Property("MarketValue");

@@ -1,5 +1,6 @@
 using MediatR;
 using ClubCraft.Draft.Application.Repositories;
+using ClubCraft.BuildingBlocks.Common.Enums;
 
 namespace ClubCraft.Draft.Application.Commands.StartDraft;
 
@@ -37,7 +38,7 @@ public class StartDraftCommandHandler : IRequestHandler<StartDraftCommand, bool>
             
             if (playersList.Count == 0) // Fallback in case JSON is missing or empty
             {
-                playersList.Add(new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Fallback Player", "FWD", 70, 25, 1000000)));
+                playersList.Add(new (Guid.NewGuid(), new ClubCraft.Draft.Domain.ValueObjects.PlayerSnapshot("Fallback Player", PlayerPosition.ST, 70, 25, 1000000)));
             }
 
             var fakePlayers = playersList;
@@ -64,7 +65,7 @@ public class StartDraftCommandHandler : IRequestHandler<StartDraftCommand, bool>
 public class PlayerDto
 {
     public string Name { get; set; } = string.Empty;
-    public string Position { get; set; } = string.Empty;
+    public PlayerPosition Position { get; set; }
     public int Overall { get; set; }
     public int Age { get; set; }
     public double MarketValue { get; set; }

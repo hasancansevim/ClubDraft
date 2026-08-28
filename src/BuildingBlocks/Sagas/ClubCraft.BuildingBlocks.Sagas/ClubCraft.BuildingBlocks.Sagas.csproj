@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Contracts\ClubCraft.BuildingBlocks.Contracts.csproj" />
+    <ProjectReference Include="..\..\Common\ClubCraft.BuildingBlocks.Common.csproj" />
   </ItemGroup>
 
 </Project>

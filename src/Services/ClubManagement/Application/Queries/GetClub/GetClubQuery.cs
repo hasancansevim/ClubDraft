@@ -1,5 +1,6 @@
 using MediatR;
 using ClubCraft.ClubManagement.Domain.Enums;
+using ClubCraft.BuildingBlocks.Common.Enums;
 using System.Collections.Generic;
 
 namespace ClubCraft.ClubManagement.Application.Queries.GetClub;
@@ -17,13 +18,14 @@ public class GetClubQueryResult
     public List<RosterPlayerDto> Roster { get; set; } = new();
     public List<WeeklyDecisionDto> WeeklyDecisions { get; set; } = new();
     public string LineupJson { get; set; } = "{}";
+    public string Formation { get; set; } = "4-4-2";
 }
 
 public class RosterPlayerDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
-    public string Position { get; set; } = string.Empty;
+    public PlayerPosition Position { get; set; }
     public int Overall { get; set; }
     public int Age { get; set; }
     public decimal MarketValue { get; set; }

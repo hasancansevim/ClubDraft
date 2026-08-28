@@ -74,8 +74,18 @@ const Loader = ({ text = 'Yükleniyor...' }: { text?: string }) => (
 );
 
 // ─── POSITION BADGE ───────────────────────────────────────────────────────────
+// Detayli pozisyon kodu (bkz. BuildingBlocks.Common.Enums.PlayerPosition) -> renk grubu.
+// CSS sadece GK/DEF/MID/FWD renklerini taniyor; rozet METNİ hala tam detayli kodu
+// gosteriyor (orn. "CDM"), sadece RENGİ bu gruba gore seciliyor.
+const POSITION_GROUP: Record<string, string> = {
+  GK: 'GK',
+  CB: 'DEF', RB: 'DEF', LB: 'DEF', RWB: 'DEF', LWB: 'DEF',
+  CDM: 'MID', CM: 'MID', CAM: 'MID', RM: 'MID', LM: 'MID',
+  RW: 'FWD', LW: 'FWD', ST: 'FWD', CF: 'FWD',
+};
+
 const PosBadge = ({ pos }: { pos: string }) => (
-  <span className={`cc-pos-badge ${pos}`}>{pos}</span>
+  <span className={`cc-pos-badge ${POSITION_GROUP[pos] || pos}`}>{pos}</span>
 );
 
 // ─── OVERALL COLOR ────────────────────────────────────────────────────────────
@@ -664,11 +674,14 @@ const Draft = () => {
               id="draft-search"
             />
             <div className="cc-pos-filter-group">
-              {(['ALL', 'GK', 'DEF', 'MID', 'FWD'] as const).map(pos => (
+              {/* 'ALL' + detayli pozisyon kodlari, GK/DEF/MID/FWD gruplarina gore siralanmis.
+                  Farkli formasyonlarin farkli slot ihtiyaclari oldugu icin (orn. 3-5-2 oynayan
+                  birinin CB ihtiyaci 4-4-2'den farkli) kaba kategori yerine tam kod filtreleniyor. */}
+              {(['ALL', 'GK', 'CB', 'RB', 'LB', 'RWB', 'LWB', 'CDM', 'CM', 'CAM', 'RM', 'LM', 'RW', 'LW', 'ST', 'CF'] as const).map(pos => (
                 <button
                   key={pos}
                   onClick={() => setPositionFilter(pos)}
-                  className={`cc-pos-pill ${positionFilter === pos ? `active-${pos}` : ''}`}
+                  className={`cc-pos-pill ${positionFilter === pos ? `active-${pos === 'ALL' ? 'ALL' : POSITION_GROUP[pos]}` : ''}`}
                   id={`filter-${pos}`}
                 >
                   {pos === 'ALL' ? 'Tümü' : pos}

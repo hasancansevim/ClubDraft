@@ -55,7 +55,7 @@ public class DraftDbContext : DbContext
             builder.OwnsOne(x => x.Snapshot, s =>
             {
                 s.Property(p => p.Name).HasColumnName("PlayerName");
-                s.Property(p => p.Position).HasColumnName("PlayerPosition");
+                s.Property(p => p.Position).HasColumnName("PlayerPosition").HasConversion<string>();
                 s.Property(p => p.Overall).HasColumnName("PlayerOverall");
                 s.Property(p => p.Age).HasColumnName("PlayerAge");
                 s.Property(p => p.MarketValue).HasColumnName("PlayerMarketValue");
