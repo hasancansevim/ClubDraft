@@ -5,6 +5,8 @@ import { sessionApi } from './api/sessionApi';
 import type { Participant } from './api/sessionApi';
 import { useSignalR } from './hooks/useSignalR';
 import { draftApi, type Player, type DraftState } from './api/draftApi';
+import { seasonApi } from './api/seasonApi';
+import { FORMATIONS, FORMATION_NAMES, POSITION_GROUP } from './constants/formations';
 import { SeasonDashboard } from './pages/SeasonDashboard';
 import { SponsorshipDashboard } from './pages/SponsorshipDashboard';
 import { SummaryDashboard } from './pages/SummaryDashboard';
@@ -74,16 +76,8 @@ const Loader = ({ text = 'Yükleniyor...' }: { text?: string }) => (
 );
 
 // ─── POSITION BADGE ───────────────────────────────────────────────────────────
-// Detayli pozisyon kodu (bkz. BuildingBlocks.Common.Enums.PlayerPosition) -> renk grubu.
-// CSS sadece GK/DEF/MID/FWD renklerini taniyor; rozet METNİ hala tam detayli kodu
-// gosteriyor (orn. "CDM"), sadece RENGİ bu gruba gore seciliyor.
-const POSITION_GROUP: Record<string, string> = {
-  GK: 'GK',
-  CB: 'DEF', RB: 'DEF', LB: 'DEF', RWB: 'DEF', LWB: 'DEF',
-  CDM: 'MID', CM: 'MID', CAM: 'MID', RM: 'MID', LM: 'MID',
-  RW: 'FWD', LW: 'FWD', ST: 'FWD', CF: 'FWD',
-};
-
+// POSITION_GROUP artik constants/formations.ts'te tek yerde tutuluyor (Sezon
+// Dashboard'la paylasiliyor) — bkz. import.
 const PosBadge = ({ pos }: { pos: string }) => (
   <span className={`cc-pos-badge ${POSITION_GROUP[pos] || pos}`}>{pos}</span>
 );
@@ -424,19 +418,12 @@ const Draft = () => {
 
   const [lineup, setLineup] = useState<Record<string, string | null>>({});
 
-  const FORMATION_SLOTS = [
-    { id: 'ST1', label: 'ST', top: '20%', left: '35%' },
-    { id: 'ST2', label: 'ST', top: '20%', left: '65%' },
-    { id: 'LM',  label: 'LM', top: '45%', left: '20%' },
-    { id: 'CM1', label: 'CM', top: '48%', left: '40%' },
-    { id: 'CM2', label: 'CM', top: '48%', left: '60%' },
-    { id: 'RM',  label: 'RM', top: '45%', left: '80%' },
-    { id: 'LB',  label: 'LB', top: '72%', left: '20%' },
-    { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
-    { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
-    { id: 'RB',  label: 'RB', top: '72%', left: '80%' },
-    { id: 'GK',  label: 'GK', top: '90%', left: '50%' },
-  ];
+  // Formasyon icin YENİ bir state kavrami icat edilmedi — Sezon Dashboard'daki
+  // AYNI Club.Formation alani okunuyor/yaziliyor (bkz. seasonApi.getClub /
+  // updateFormation). Bu component'teki `formation` sadece o backend degerinin
+  // yerel bir kopyasi (Sezon Dashboard'daki desenin birebir aynisi).
+  const [formation, setFormation] = useState<string>('4-4-2');
+  const FORMATION_SLOTS = FORMATIONS[formation] || FORMATIONS['4-4-2'];
 
   const handleDragStart = (e: React.DragEvent, playerId: string) => {
     e.dataTransfer.setData('playerId', playerId);
@@ -468,6 +455,23 @@ const Draft = () => {
     });
   };
 
+  const handleFormationChange = async (newFormation: string) => {
+    if (!myClubId || newFormation === formation) return;
+    const previous = formation;
+    setFormation(newFormation);
+    // Backend de formasyon degisince lineup'i sifirliyor (bkz. Club.UpdateFormation)
+    // — yerel draft-lineup onizlemesini de onunla senkron tut.
+    setLineup({});
+    if (draftSessionId) localStorage.removeItem(`draft_lineup_${draftSessionId}`);
+    try {
+      await seasonApi.updateFormation(myClubId, newFormation);
+      toast('success', `Formasyon ${newFormation} olarak değiştirildi. İlk 11'i yeniden dizmeniz gerekiyor.`);
+    } catch (err) {
+      setFormation(previous);
+      toast('error', 'Formasyon değiştirilemedi!');
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       if (!shortCode) return;
@@ -494,7 +498,15 @@ const Draft = () => {
           const fullRoom = await fetchWithRetry(() => sessionApi.getRoom(room.id));
           if (fullRoom?.participants) {
             const myP = fullRoom.participants.find((p: Participant) => p.id === participantId);
-            if (myP?.clubId) setMyClubId(myP.clubId);
+            if (myP?.clubId) {
+              setMyClubId(myP.clubId);
+              // Formasyon Sezon Dashboard'daki AYNI Club.Formation alanindan okunuyor
+              // (ClubInitializedEvent henuz isleneli cok az olmus olabilir, o yuzden
+              // sessiz gec — varsayilan '4-4-2' kalir, kullanici degistirebilir).
+              seasonApi.getClub(myP.clubId)
+                .then(club => setFormation(club.formation || '4-4-2'))
+                .catch(() => {});
+            }
           }
 
           const poolData = await fetchWithRetry(() => draftApi.getPool(room.id));
@@ -774,8 +786,19 @@ const Draft = () => {
         <div style={{ width: '340px', flexShrink: 0, position: 'sticky', top: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {/* Pitch */}
           <div className="cc-card" style={{ padding: '1.25rem 1rem' }}>
-            <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', fontSize: '1.1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
-              <span>İlk 11</span>
+            <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', fontSize: '1.1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', gap: '0.5rem' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>İlk 11</span>
+                <select
+                  value={formation}
+                  onChange={e => handleFormationChange(e.target.value)}
+                  className="cc-input"
+                  id="formation-select"
+                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', width: 'auto' }}
+                >
+                  {FORMATION_NAMES.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </span>
               <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '0.85rem', color: lineupCount === FORMATION_SLOTS.length ? 'var(--accent)' : 'var(--text-secondary)' }}>
                 {lineupCount}/{FORMATION_SLOTS.length}
               </span>
