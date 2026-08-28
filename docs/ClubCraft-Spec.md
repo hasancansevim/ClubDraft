@@ -714,6 +714,20 @@ GK/DEF/MID/FWD kalıntısı (badge metni olarak) görünmüyor — renk gruplama
 iç uygulama detayı olarak kaldı, kullanıcıya her zaman tam detaylı kod
 gösteriliyor.
 
+**Formasyon seçimi Draft ekranına da eklendi (2026-08-28):** Yeni bir
+state kavramı icat edilmedi — Draft ekranı da Sezon Dashboard'la **aynı**
+`Club.Formation` alanını okuyup (`seasonApi.getClub`) yazıyor
+(`seasonApi.updateFormation`). `FORMATIONS`/`FORMATION_NAMES`/
+`POSITION_GROUP` sabitleri artık tek bir paylaşılan dosyada
+(`frontend/src/constants/formations.ts`) tutuluyor — eskiden tek
+formasyonun App.tsx ve SeasonDashboard.tsx'te ayrı ayrı kopyalanmış
+olması zaten bir bakım riskiydi, bu sefer paylaşılan modülle önlendi.
+**Doğrulama:** Draft ekranında formasyon 3-5-2'ye değiştirildi (saha
+doğru yeniden çizildi, backend'de `Formation` API'den "3-5-2" olarak
+teyit edildi) → draft tamamlandı → Sezon Dashboard'a geçildi → dropdown
+hâlâ "3-5-2" seçili, saha aynı dizilimde, DB'de (`Clubs.Formation`) tek
+ve tutarlı bir değer görüldü.
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
