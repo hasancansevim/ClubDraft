@@ -700,6 +700,51 @@ akışında bir eventual-consistency detayı bulundu: bütçe kredisi
 hemen-sonrası fetch bazen krediden önce yetişip eski bütçeyi gösterebiliyordu
 — polling ve kısa gecikmeli tekrar denemelerle düzeltildi.
 
+### Pozisyon sistemi detaylandırma + formasyon seçimi (2026-08-28)
+
+**Kaba kategoriden (GK/DEF/MID/FWD) detaylı pozisyona geçildi.** Yeni
+`PlayerPosition` enum'ı (`BuildingBlocks.Common.Enums` — Draft.Domain ve
+ClubManagement.Domain zaten bu projeye referans veriyordu, iki ayrı enum'un
+elle senkron tutulma riskinden kaçınmak için tek yerde tanımlandı) 15 değer
+taşıyor: `GK, CB, RB, LB, RWB, LWB, CDM, CM, CAM, RM, LM, RW, LW, ST, CF`.
+JSON'da her zaman **string** olarak serialize ediliyor
+(`[JsonConverter(JsonStringEnumConverter)]`) — `WeeklyDecisionType`'ta
+yaşanan servisler-arası int-değeri karışıklığı burada tekrarlanmasın diye.
+Değişen katmanlar: `PlayerSnapshot`, `Player`, `IPlayerClaimedEvent`,
+`IAddPlayerToRosterCommand`, tüm ilgili DTO'lar; DB kolonları
+`.HasConversion<string>()` ile okunabilir tutuldu.
+
+`process_players.py`, CSV'nin `player_positions` alanının birincil kodunu
+artık kaba kategoriye indirgemeden birebir kullanıyor.
+`draft-player-pool.json` 3149 oyuncuyla yeniden üretildi (hiçbiri
+atlanmadı): CB 591, ST 406, CM 381, GK 289, CDM 276, RB 214, LB 211,
+CAM 172, RM 165, LM 133, RW 84, LW 82, RWB 57, CF 46, LWB 42.
+
+Geliştirme verisi tamamen sıfırlandı (`docker compose down -v` + `up -d`),
+tüm servislerin migration'ları bu değişiklikle birlikte yeniden uygulandı.
+
+**Formasyon seçimi eklendi.** `Club.Formation` alanı (varsayılan `4-4-2`),
+`PUT /api/clubs/{clubId}/formation` ile değiştiriliyor — formasyon
+değişince `LineupJson` bilinçli olarak sıfırlanıyor (eski slot ID'leri yeni
+formasyonda anlamlı olmayabilir). Sezon Dashboard'da "İlk 11" başlığının
+yanına bir dropdown eklendi; 4 formasyon (**4-4-2, 4-3-3, 4-2-3-1, 3-5-2**)
+arasında seçim yapılabiliyor, her biri farklı slot sayısı/dağılımı taşıyor
+(örn. 3-5-2'de 3 CB + 5 orta saha). Draft filtre sekmeleri de 5 kaba
+kategoriden 16 detaylı koda genişletildi (örn. CB'yi DEF'ten ayrı
+filtreleyebilmek için — farklı formasyonların farklı slot ihtiyaçları
+olduğu için önemli).
+
+**Doğrulama (Playwright, gerçek tarayıcı):** Sıfırdan bir draft tamamlandı,
+draft pool'un ve roster'ın detaylı pozisyonları doğru döndürdüğü API'den
+teyit edildi; Draft ekranında 16 filtre sekmesi (CDM filtresi tek başına
+25 CDM oyuncusunu doğru listeledi) ve renk-kodlu rozetler ekran
+görüntüsüyle kanıtlandı; Sezon Dashboard'da formasyon 4-4-2'den 4-3-3'e
+değiştirilip sahanın doğru slotlarla yeniden çizildiği, backend'de
+`Formation` alanının kalıcı olduğu API'den teyit edildi. Hiçbir yerde eski
+GK/DEF/MID/FWD kalıntısı (badge metni olarak) görünmüyor — renk gruplaması
+iç uygulama detayı olarak kaldı, kullanıcıya her zaman tam detaylı kod
+gösteriliyor.
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
