@@ -6,6 +6,8 @@ import type { Participant } from './api/sessionApi';
 import { useSignalR } from './hooks/useSignalR';
 import { draftApi, type Player, type DraftState } from './api/draftApi';
 import { SeasonDashboard } from './pages/SeasonDashboard';
+import { SponsorshipDashboard } from './pages/SponsorshipDashboard';
+import { SummaryDashboard } from './pages/SummaryDashboard';
 
 // ─── TOAST SYSTEM ────────────────────────────────────────────────────────────
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -916,8 +918,8 @@ function App() {
         <Route path="/lobby/:roomId" element={<Lobby />} />
         <Route path="/draft/:roomId" element={<Draft />} />
         <Route path="/season/:roomId" element={<SeasonDashboard />} />
-        <Route path="/sponsorship/:roomId" element={<PlaceholderPage title="Sponsorluk Teklifleri" icon="🤝" desc="Gelen teklifleri değerlendirin." />} />
-        <Route path="/summary/:roomId" element={<PlaceholderPage title="Sezon Sonu Özeti" icon="🏆" desc="Kazananlar ve istatistikler." />} />
+        <Route path="/sponsorship/:roomId" element={<SponsorshipDashboard />} />
+        <Route path="/summary/:roomId" element={<SummaryDashboard />} />
       </Routes>
     </BrowserRouter>
   );
