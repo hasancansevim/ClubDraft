@@ -6,7 +6,7 @@ namespace ClubCraft.ClubManagement.Domain.Events;
 
 public record ClubInitializedEvent(Guid ClubId, Guid RoomId, Guid PresidentUserId, string Name, decimal InitialBudget, Guid ParticipantId) : IDomainEvent { public DateTime OccurredOn { get; } = DateTime.UtcNow; }
 
-public record PlayerAddedToRosterEvent(Guid ClubId, Guid PlayerId, int Overall, Guid PickAttemptId) : IDomainEvent { public DateTime OccurredOn { get; } = DateTime.UtcNow; }
+public record PlayerAddedToRosterEvent(Guid ClubId, Guid RoomId, Guid PlayerId, int Overall, Guid PickAttemptId) : IDomainEvent { public DateTime OccurredOn { get; } = DateTime.UtcNow; }
 
 public record PlayerRemovedFromRosterEvent(Guid ClubId, Guid PlayerId) : IDomainEvent { public DateTime OccurredOn { get; } = DateTime.UtcNow; }
 

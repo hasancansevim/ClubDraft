@@ -60,6 +60,7 @@ public class PublishDomainEventsInterceptor : SaveChangesInterceptor
                 await _publishEndpoint.Publish<IPlayerAddedToRosterEvent>(new
                 {
                     ClubId = e.ClubId,
+                    RoomId = e.RoomId,
                     PlayerId = e.PlayerId,
                     Overall = e.Overall,
                     PickAttemptId = e.PickAttemptId

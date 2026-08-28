@@ -4,6 +4,7 @@ public interface IPlayerAddedToRosterEvent
 {
     Guid PickAttemptId { get; }
     Guid ClubId { get; }
+    Guid RoomId { get; }
     Guid PlayerId { get; }
     int Overall { get; }
 }

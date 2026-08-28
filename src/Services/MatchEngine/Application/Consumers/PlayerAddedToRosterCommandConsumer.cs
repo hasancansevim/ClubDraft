@@ -22,7 +22,7 @@ public class PlayerAddedToRosterCommandConsumer : IConsumer<IPlayerAddedToRoster
         if (power == null)
         {
             // Lazily create if not exists
-            power = new ClubPowerRating(msg.ClubId, Guid.Empty);
+            power = new ClubPowerRating(msg.ClubId, msg.RoomId);
         }
 
         power.AddPlayer(msg.Overall);

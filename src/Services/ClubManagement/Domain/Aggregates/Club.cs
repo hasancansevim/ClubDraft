@@ -44,7 +44,7 @@ public class Club : AggregateRoot<Guid>
         {
             // Idempotency: if player is already added, emit success event again silently 
             // so the Saga doesn't get stuck or trigger a false compensating action.
-            AddDomainEvent(new PlayerAddedToRosterEvent(Id, playerId, overall, pickAttemptId));
+            AddDomainEvent(new PlayerAddedToRosterEvent(Id, RoomId, playerId, overall, pickAttemptId));
             return;
         }
 
@@ -57,7 +57,7 @@ public class Club : AggregateRoot<Guid>
         var player = new Player(playerId, name, position, overall, age, marketValue);
         _roster.Add(player);
 
-        AddDomainEvent(new PlayerAddedToRosterEvent(Id, playerId, overall, pickAttemptId));
+        AddDomainEvent(new PlayerAddedToRosterEvent(Id, RoomId, playerId, overall, pickAttemptId));
     }
 
     public void RemovePlayerFromRoster(Guid playerId)
