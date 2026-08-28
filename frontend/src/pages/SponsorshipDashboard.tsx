@@ -51,6 +51,15 @@ export const SponsorshipDashboard = () => {
     }
   }, []);
 
+  const fetchBudget = useCallback(async (cId: string) => {
+    try {
+      const club = await seasonApi.getClub(cId);
+      setBudget(club.budget);
+    } catch {
+      // sessiz gec — polling bir sonraki turda tekrar dener
+    }
+  }, []);
+
   const fetchInitial = useCallback(async () => {
     try {
       if (!shortCode) return;
@@ -100,12 +109,19 @@ export const SponsorshipDashboard = () => {
   // degil (ReputationThresholdReachedEventConsumer teklifi DB'ye yaziyor ama
   // yeni bir integration event yayinlamiyor) — bu yuzden SignalR yerine kisa
   // araliklarla polling ile yeni tekliflerin/son kullanma tarihi gecmislerin
-  // yakalanmasi saglaniyor.
+  // yakalanmasi saglaniyor. Butce de ayni pollinge dahil edildi: kabul sonrasi
+  // gercek kredi RabbitMQ/Outbox uzerinden asenkron islendigi icin (bkz.
+  // ISponsorshipAcceptedEvent -> ClubManagement), tek seferlik hemen-sonrasi
+  // fetch bazen krediden once yetisip eski butceyi gosterebiliyordu — polling
+  // birkac saniye icinde kendini duzeltiyor.
   useEffect(() => {
     if (!clubId) return;
-    const interval = setInterval(() => fetchOffers(clubId), 4000);
+    const interval = setInterval(() => {
+      fetchOffers(clubId);
+      fetchBudget(clubId);
+    }, 4000);
     return () => clearInterval(interval);
-  }, [clubId, fetchOffers]);
+  }, [clubId, fetchOffers, fetchBudget]);
 
   const handleRespond = async (offer: SponsorshipOffer, response: 'Accept' | 'Reject') => {
     if (!clubId || respondingId) return;
@@ -115,8 +131,11 @@ export const SponsorshipDashboard = () => {
       toast('success', response === 'Accept' ? 'Sponsorluk teklifi kabul edildi!' : 'Teklif reddedildi.');
       await fetchOffers(clubId);
       if (response === 'Accept') {
-        const club = await seasonApi.getClub(clubId);
-        setBudget(club.budget);
+        // Budget kredisi asenkron (event-driven) islendigi icin hemen taze
+        // olmayabilir — birkac kez kisa aralikla tekrar dene.
+        await fetchBudget(clubId);
+        setTimeout(() => fetchBudget(clubId), 1500);
+        setTimeout(() => fetchBudget(clubId), 3500);
       }
     } catch (err: any) {
       const reason = err.response?.data || err.message;
