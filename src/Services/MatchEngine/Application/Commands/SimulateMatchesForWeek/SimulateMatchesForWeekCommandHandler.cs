@@ -2,6 +2,7 @@ using ClubCraft.MatchEngine.Application.Repositories;
 using ClubCraft.MatchEngine.Domain.Services;
 using MediatR;
 using MassTransit;
+using Microsoft.Extensions.Logging;
 
 namespace ClubCraft.MatchEngine.Application.Commands.SimulateMatchesForWeek;
 
@@ -11,13 +12,15 @@ public class SimulateMatchesForWeekCommandHandler : IRequestHandler<SimulateMatc
     private readonly IClubPowerRatingRepository _powerRepository;
     private readonly IMatchSimulator _matchSimulator;
     private readonly IPublishEndpoint _publishEndpoint;
+    private readonly ILogger<SimulateMatchesForWeekCommandHandler> _logger;
 
-    public SimulateMatchesForWeekCommandHandler(IFixtureRepository fixtureRepository, IClubPowerRatingRepository powerRepository, IMatchSimulator matchSimulator, IPublishEndpoint publishEndpoint)
+    public SimulateMatchesForWeekCommandHandler(IFixtureRepository fixtureRepository, IClubPowerRatingRepository powerRepository, IMatchSimulator matchSimulator, IPublishEndpoint publishEndpoint, ILogger<SimulateMatchesForWeekCommandHandler> logger)
     {
         _fixtureRepository = fixtureRepository;
         _powerRepository = powerRepository;
         _matchSimulator = matchSimulator;
         _publishEndpoint = publishEndpoint;
+        _logger = logger;
     }
 
     public async Task Handle(SimulateMatchesForWeekCommand request, CancellationToken cancellationToken)
@@ -27,6 +30,16 @@ public class SimulateMatchesForWeekCommandHandler : IRequestHandler<SimulateMatc
             throw new Exception($"Fixture for room {request.RoomId} not found.");
 
         var matchesForWeek = fixture.Matches.Where(m => m.Week == request.Week && !m.IsPlayed).ToList();
+
+        if (matchesForWeek.Count == 0)
+        {
+            // Fikstürde bu hafta için hiç maç yok (örn. sezon uzunluğundan daha kısa, eski bir
+            // fikstür) — WeekSimulationCompletedEvent yine de yayınlanır (aksi halde ready-check
+            // hiç ilerlemez) ama bu durum sessizce geçilmemeli, açıkça loglanmalı.
+            _logger.LogWarning(
+                "SimulateMatchesForWeek: Room {RoomId} icin Week {Week}'de fikstürde hic mac yok (toplam {TotalMatches} mac fikstürde kayitli). Season fikstürü eksik/kisa olabilir.",
+                request.RoomId, request.Week, fixture.Matches.Count);
+        }
 
         foreach (var match in matchesForWeek)
         {

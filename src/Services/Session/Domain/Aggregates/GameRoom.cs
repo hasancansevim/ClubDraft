@@ -14,6 +14,16 @@ namespace ClubCraft.Session.Domain.Aggregates
         public RoomStatus Status { get; private set; }
         public int CurrentWeek { get; private set; }
         public int MaxParticipants { get; private set; }
+
+        // AllParticipantsReadyForNextWeekEvent yayinlandiktan sonra CurrentWeek hemen
+        // ilerlemiyor — MatchEngine'in o haftayi simule edip WeekSimulationCompletedEvent
+        // ile geri bildirmesini bekliyor (bkz. AdvanceWeek). Bu araki asenkron pencerede
+        // ready() tekrar cagrilirsa (hizli ust uste "Hazirim" tiklamasi, agdaki gecikme vb.)
+        // CurrentWeek henuz artmadigi icin ayni hafta numarasiyla event ikinci kez ateslenip
+        // hic mac oynanmadan hafta sayacinin ilerlemesine yol aciyordu (bkz. spec.md,
+        // 2026-08-28 notu). Bu flag, bir hafta ilerletme "ucusta" iken yenisinin
+        // tetiklenmesini engelliyor.
+        public bool WeekAdvancePending { get; private set; }
         
         private readonly List<Participant> _participants = new();
         public IReadOnlyCollection<Participant> Participants => _participants.AsReadOnly();
@@ -89,6 +99,14 @@ namespace ClubCraft.Session.Domain.Aggregates
                 }
                 else if (phase == "WeekAdvance")
                 {
+                    if (WeekAdvancePending)
+                    {
+                        // Bu haftanin ilerletmesi zaten islemde (MatchEngine'in simulasyonu
+                        // tamamlamasi bekleniyor) — tekrar tetiklenmesin.
+                        return;
+                    }
+
+                    WeekAdvancePending = true;
                     AddDomainEvent(new AllParticipantsReadyForNextWeekEvent(Id, CurrentWeek));
                 }
             }
@@ -111,6 +129,7 @@ namespace ClubCraft.Session.Domain.Aggregates
         public void AdvanceWeek()
         {
             CurrentWeek++;
+            WeekAdvancePending = false;
             ResetReadyStatus();
         }
 
