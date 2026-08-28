@@ -52,4 +52,13 @@ public class ClubController : ControllerBase
         if (!success) return NotFound();
         return Ok();
     }
+
+    [HttpPut("{clubId}/formation")]
+    public async Task<IActionResult> UpdateFormation(Guid clubId, [FromBody] ClubCraft.ClubManagement.Application.Commands.UpdateFormation.UpdateFormationCommand command)
+    {
+        if (command.ClubId != clubId) return BadRequest("ClubId mismatch");
+        var success = await _mediator.Send(command);
+        if (!success) return NotFound();
+        return Ok();
+    }
 }

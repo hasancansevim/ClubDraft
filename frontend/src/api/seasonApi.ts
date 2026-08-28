@@ -24,6 +24,7 @@ export interface ClubDetails {
   roster: RosterPlayer[];
   weeklyDecisions: WeeklyDecision[];
   lineupJson: string;
+  formation: string;
 }
 
 export interface TeamStanding {
@@ -82,6 +83,14 @@ export const seasonApi = {
     await axios.put(
       `${API_BASE}/clubs/${clubId}/lineup`,
       { clubId, lineupJson },
+      { withCredentials: true }
+    );
+  },
+
+  updateFormation: async (clubId: string, formation: string): Promise<void> => {
+    await axios.put(
+      `${API_BASE}/clubs/${clubId}/formation`,
+      { clubId, formation },
       { withCredentials: true }
     );
   }

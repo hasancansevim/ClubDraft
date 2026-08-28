@@ -13,9 +13,81 @@ const overallColor = (ov: number) => {
   return '#8B93A7';
 };
 
+// Detayli pozisyon kodu (bkz. BuildingBlocks.Common.Enums.PlayerPosition) -> renk grubu.
+// .cc-pos-badge CSS'i sadece GK/DEF/MID/FWD renklerini taniyor; rozet METNİ hala
+// tam detayli kodu (orn. "CDM") gosteriyor, sadece RENGİ bu gruba gore seciliyor.
+const POSITION_GROUP: Record<string, string> = {
+  GK: 'GK',
+  CB: 'DEF', RB: 'DEF', LB: 'DEF', RWB: 'DEF', LWB: 'DEF',
+  CDM: 'MID', CM: 'MID', CAM: 'MID', RM: 'MID', LM: 'MID',
+  RW: 'FWD', LW: 'FWD', ST: 'FWD', CF: 'FWD',
+};
+
 const PosBadge = ({ pos }: { pos: string }) => (
-  <span className={`cc-pos-badge ${pos}`}>{pos}</span>
+  <span className={`cc-pos-badge ${POSITION_GROUP[pos] || pos}`}>{pos}</span>
 );
+
+interface FormationSlot { id: string; label: string; top: string; left: string; }
+
+// Kullanicinin secebilecegi 4 formasyon — her biri farkli slot sayisi/dagilimi
+// tasiyor (bkz. spec.md, pozisyon sistemi detaylandirma notu). Formasyon
+// degisince lineup sifirlaniyor (bkz. Club.UpdateFormation) cunku eski slot
+// ID'leri yeni formasyonda anlamli olmayabilir.
+const FORMATIONS: Record<string, FormationSlot[]> = {
+  '4-4-2': [
+    { id: 'GK', label: 'GK', top: '90%', left: '50%' },
+    { id: 'LB', label: 'LB', top: '72%', left: '20%' },
+    { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
+    { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
+    { id: 'RB', label: 'RB', top: '72%', left: '80%' },
+    { id: 'LM', label: 'LM', top: '45%', left: '20%' },
+    { id: 'CM1', label: 'CM', top: '48%', left: '40%' },
+    { id: 'CM2', label: 'CM', top: '48%', left: '60%' },
+    { id: 'RM', label: 'RM', top: '45%', left: '80%' },
+    { id: 'ST1', label: 'ST', top: '20%', left: '35%' },
+    { id: 'ST2', label: 'ST', top: '20%', left: '65%' },
+  ],
+  '4-3-3': [
+    { id: 'GK', label: 'GK', top: '90%', left: '50%' },
+    { id: 'LB', label: 'LB', top: '72%', left: '20%' },
+    { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
+    { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
+    { id: 'RB', label: 'RB', top: '72%', left: '80%' },
+    { id: 'CDM', label: 'CDM', top: '58%', left: '50%' },
+    { id: 'CM1', label: 'CM', top: '48%', left: '30%' },
+    { id: 'CM2', label: 'CM', top: '48%', left: '70%' },
+    { id: 'LW', label: 'LW', top: '22%', left: '18%' },
+    { id: 'ST', label: 'ST', top: '18%', left: '50%' },
+    { id: 'RW', label: 'RW', top: '22%', left: '82%' },
+  ],
+  '4-2-3-1': [
+    { id: 'GK', label: 'GK', top: '90%', left: '50%' },
+    { id: 'LB', label: 'LB', top: '72%', left: '20%' },
+    { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
+    { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
+    { id: 'RB', label: 'RB', top: '72%', left: '80%' },
+    { id: 'CDM1', label: 'CDM', top: '58%', left: '38%' },
+    { id: 'CDM2', label: 'CDM', top: '58%', left: '62%' },
+    { id: 'LW', label: 'LW', top: '36%', left: '18%' },
+    { id: 'CAM', label: 'CAM', top: '33%', left: '50%' },
+    { id: 'RW', label: 'RW', top: '36%', left: '82%' },
+    { id: 'ST', label: 'ST', top: '16%', left: '50%' },
+  ],
+  '3-5-2': [
+    { id: 'GK', label: 'GK', top: '90%', left: '50%' },
+    { id: 'CB1', label: 'CB', top: '75%', left: '30%' },
+    { id: 'CB2', label: 'CB', top: '78%', left: '50%' },
+    { id: 'CB3', label: 'CB', top: '75%', left: '70%' },
+    { id: 'LWB', label: 'LWB', top: '48%', left: '10%' },
+    { id: 'CDM', label: 'CDM', top: '55%', left: '38%' },
+    { id: 'CM', label: 'CM', top: '52%', left: '50%' },
+    { id: 'CAM', label: 'CAM', top: '55%', left: '62%' },
+    { id: 'RWB', label: 'RWB', top: '48%', left: '90%' },
+    { id: 'ST1', label: 'ST', top: '20%', left: '38%' },
+    { id: 'ST2', label: 'ST', top: '20%', left: '62%' },
+  ],
+};
+const FORMATION_NAMES = Object.keys(FORMATIONS);
 
 export const SeasonDashboard = () => {
   // URL param is the human-readable short code (e.g. "TIGER42"), NOT the real RoomId (GUID).
@@ -32,6 +104,7 @@ export const SeasonDashboard = () => {
   const [standings, setStandings] = useState<TeamStanding[]>([]);
   const [fixture, setFixture] = useState<FixtureMatch[]>([]);
   const [lineup, setLineup] = useState<Record<string, string | null>>({});
+  const [formation, setFormation] = useState<string>('4-4-2');
 
   const [participants, setParticipants] = useState<any[]>([]);
   const [isReady, setIsReady] = useState(false);
@@ -119,6 +192,7 @@ export const SeasonDashboard = () => {
 
       setClubDetails(club);
       setReputation(rep);
+      setFormation(club.formation || '4-4-2');
       try {
         const parsedLineup = club.lineupJson ? JSON.parse(club.lineupJson) : {};
         setLineup(parsedLineup);
@@ -181,6 +255,20 @@ export const SeasonDashboard = () => {
 
   const handleDragStart = (e: React.DragEvent, playerId: string) => {
     e.dataTransfer.setData('playerId', playerId);
+  };
+
+  const handleFormationChange = async (newFormation: string) => {
+    if (!clubId || newFormation === formation) return;
+    const previous = formation;
+    setFormation(newFormation);
+    setLineup({}); // Backend de formasyon degisince lineup'i sifirliyor (bkz. Club.UpdateFormation) — UI'i onunla senkron tut.
+    try {
+      await seasonApi.updateFormation(clubId, newFormation);
+      toast('success', `Formasyon ${newFormation} olarak değiştirildi. İlk 11'i yeniden dizmeniz gerekiyor.`);
+    } catch (err) {
+      setFormation(previous);
+      toast('error', 'Formasyon değiştirilemedi!');
+    }
   };
 
   const handleDropToSlot = async (e: React.DragEvent, slotId: string) => {
@@ -246,19 +334,7 @@ export const SeasonDashboard = () => {
 
   // Render Roster view (readonly)
   const renderRoster = () => {
-    const FORMATION_SLOTS = [
-      { id: 'ST1', label: 'ST', top: '20%', left: '35%' },
-      { id: 'ST2', label: 'ST', top: '20%', left: '65%' },
-      { id: 'LM',  label: 'LM', top: '45%', left: '20%' },
-      { id: 'CM1', label: 'CM', top: '48%', left: '40%' },
-      { id: 'CM2', label: 'CM', top: '48%', left: '60%' },
-      { id: 'RM',  label: 'RM', top: '45%', left: '80%' },
-      { id: 'LB',  label: 'LB', top: '72%', left: '20%' },
-      { id: 'CB1', label: 'CB', top: '75%', left: '40%' },
-      { id: 'CB2', label: 'CB', top: '75%', left: '60%' },
-      { id: 'RB',  label: 'RB', top: '72%', left: '80%' },
-      { id: 'GK',  label: 'GK', top: '90%', left: '50%' },
-    ];
+    const FORMATION_SLOTS = FORMATIONS[formation] || FORMATIONS['4-4-2'];
 
     // Convert array of roster to lookup map
     const rosterMap = Object.fromEntries(clubDetails.roster.map(p => [p.id, p]));
@@ -267,9 +343,17 @@ export const SeasonDashboard = () => {
       <div style={{ display: 'flex', gap: '1.5rem' }}>
         {/* Pitch */}
         <div className="cc-card" style={{ padding: '1.25rem 1rem', width: '340px', flexShrink: 0 }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.85rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
-            İlk 11
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+            <h3 style={{ fontSize: '1.1rem' }}>İlk 11</h3>
+            <select
+              value={formation}
+              onChange={e => handleFormationChange(e.target.value)}
+              className="cc-input"
+              style={{ fontSize: '0.8rem', padding: '0.3rem 0.5rem', width: 'auto' }}
+            >
+              {FORMATION_NAMES.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
           <div className="pitch-container">
             <div className="pitch-lines" />
             <div className="penalty-box-top" />

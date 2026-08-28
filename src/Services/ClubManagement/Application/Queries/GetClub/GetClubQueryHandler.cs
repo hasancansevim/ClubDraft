@@ -24,6 +24,7 @@ public class GetClubQueryHandler : IRequestHandler<GetClubQuery, GetClubQueryRes
             Name = club.Name,
             Budget = club.Budget.Amount,
             LineupJson = club.LineupJson,
+            Formation = club.Formation,
             Roster = club.Roster.Select(p => new RosterPlayerDto
             {
                 Id = p.Id,
