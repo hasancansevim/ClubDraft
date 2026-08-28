@@ -9,11 +9,13 @@ export interface UseSignalROptions {
   onDraftReady?: (data: any) => void;
   onDraftTurnAdvanced?: (data: any) => void;
   onPlayerClaimed?: (data: any) => void;
+  onMatchResult?: (data: any) => void;
+  onWeekAdvanced?: (data: any) => void;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5056';
 
-export const useSignalR = ({ roomId, userId, onParticipantJoined, onParticipantReady, onDraftReady, onDraftTurnAdvanced, onPlayerClaimed }: UseSignalROptions) => {
+export const useSignalR = ({ roomId, userId, onParticipantJoined, onParticipantReady, onDraftReady, onDraftTurnAdvanced, onPlayerClaimed, onMatchResult, onWeekAdvanced }: UseSignalROptions) => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const connectionRef = useRef<signalR.HubConnection | null>(null);
@@ -23,7 +25,9 @@ export const useSignalR = ({ roomId, userId, onParticipantJoined, onParticipantR
     onParticipantReady,
     onDraftReady,
     onDraftTurnAdvanced,
-    onPlayerClaimed
+    onPlayerClaimed,
+    onMatchResult,
+    onWeekAdvanced
   });
 
   useEffect(() => {
@@ -32,7 +36,9 @@ export const useSignalR = ({ roomId, userId, onParticipantJoined, onParticipantR
       onParticipantReady,
       onDraftReady,
       onDraftTurnAdvanced,
-      onPlayerClaimed
+      onPlayerClaimed,
+      onMatchResult,
+      onWeekAdvanced
     };
   });
 
@@ -56,6 +62,8 @@ export const useSignalR = ({ roomId, userId, onParticipantJoined, onParticipantR
         connection.on('onDraftReady', (data) => callbacksRef.current.onDraftReady?.(data));
         connection.on('onDraftTurnAdvanced', (data) => callbacksRef.current.onDraftTurnAdvanced?.(data));
         connection.on('onPlayerClaimed', (data) => callbacksRef.current.onPlayerClaimed?.(data));
+        connection.on('onMatchResult', (data) => callbacksRef.current.onMatchResult?.(data));
+        connection.on('onWeekAdvanced', (data) => callbacksRef.current.onWeekAdvanced?.(data));
 
         await connection.start();
         if (isMounted) {

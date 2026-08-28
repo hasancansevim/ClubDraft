@@ -13,6 +13,7 @@ public class Club : AggregateRoot<Guid>
     public Guid PresidentUserId { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public Money Budget { get; private set; } = Money.Zero;
+    public string LineupJson { get; private set; } = "{}";
     
     private readonly List<Player> _roster = new();
     public IReadOnlyCollection<Player> Roster => _roster.AsReadOnly();
@@ -105,6 +106,11 @@ public class Club : AggregateRoot<Guid>
         Budget = Budget.Add(sponsorshipMoney);
 
         AddDomainEvent(new BudgetCreditedEvent(Id, amount, "Sponsorship Income"));
+    }
+
+    public void UpdateLineup(string lineupJson)
+    {
+        LineupJson = lineupJson;
     }
 
     private static decimal GetDecisionCost(WeeklyDecisionType type)

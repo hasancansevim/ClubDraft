@@ -18,6 +18,7 @@ export interface GameRoom {
   id: string;
   shortCode: string;
   status: number;
+  currentWeek: number;
   participants: Participant[];
 }
 

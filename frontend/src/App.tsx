@@ -5,6 +5,7 @@ import { sessionApi } from './api/sessionApi';
 import type { Participant } from './api/sessionApi';
 import { useSignalR } from './hooks/useSignalR';
 import { draftApi, type Player, type DraftState } from './api/draftApi';
+import { SeasonDashboard } from './pages/SeasonDashboard';
 
 // ─── TOAST SYSTEM ────────────────────────────────────────────────────────────
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -869,6 +870,10 @@ const PlaceholderPage = ({ title, icon, desc }: { title: string; icon: string; d
 const Navigation = () => {
   const location = useLocation();
   const isActive = (path: string) => location.pathname.startsWith(path) && path !== '/';
+  
+  // Extract roomId from the current path (e.g. /draft/123456 -> 123456)
+  const pathParts = location.pathname.split('/');
+  const currentRoomId = pathParts.length > 2 ? pathParts[2] : '';
 
   return (
     <nav className="cc-nav">
@@ -883,13 +888,17 @@ const Navigation = () => {
             { to: '/season', label: 'Sezon' },
             { to: '/sponsorship', label: 'Sponsorluk' },
             { to: '/summary', label: 'Özet' },
-          ].map(({ to, label }) => (
-            <li key={to}>
-              <Link to={`${to}/TIGER42`} className={`cc-nav-link ${isActive(to) ? 'active' : ''}`}>
-                {label}
-              </Link>
-            </li>
-          ))}
+          ].map(({ to, label }) => {
+            // Only append roomId if we are inside a room
+            const linkPath = currentRoomId ? `${to}/${currentRoomId}` : to;
+            return (
+              <li key={to}>
+                <Link to={linkPath} className={`cc-nav-link ${isActive(to) ? 'active' : ''}`}>
+                  {label}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </nav>
@@ -906,7 +915,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/lobby/:roomId" element={<Lobby />} />
         <Route path="/draft/:roomId" element={<Draft />} />
-        <Route path="/season/:roomId" element={<PlaceholderPage title="Sezon Dashboard" icon="📊" desc="Haftalık kararlarınızı verin, fikstürü takip edin." />} />
+        <Route path="/season/:roomId" element={<SeasonDashboard />} />
         <Route path="/sponsorship/:roomId" element={<PlaceholderPage title="Sponsorluk Teklifleri" icon="🤝" desc="Gelen teklifleri değerlendirin." />} />
         <Route path="/summary/:roomId" element={<PlaceholderPage title="Sezon Sonu Özeti" icon="🏆" desc="Kazananlar ve istatistikler." />} />
       </Routes>

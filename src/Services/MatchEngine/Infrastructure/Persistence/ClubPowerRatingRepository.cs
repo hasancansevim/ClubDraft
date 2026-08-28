@@ -19,6 +19,11 @@ public class ClubPowerRatingRepository : IClubPowerRatingRepository
             .FirstOrDefaultAsync(c => c.ClubId == clubId, cancellationToken);
     }
 
+    public async Task<List<ClubPowerRating>> GetByRoomIdAsync(Guid roomId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.ClubPowerRatings.Where(c => c.RoomId == roomId).ToListAsync(cancellationToken);
+    }
+
     public async Task SaveAsync(ClubPowerRating clubPowerRating, CancellationToken cancellationToken = default)
     {
         if (_dbContext.Entry(clubPowerRating).State == EntityState.Detached)

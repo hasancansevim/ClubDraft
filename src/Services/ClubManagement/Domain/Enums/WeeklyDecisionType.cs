@@ -2,7 +2,7 @@ namespace ClubCraft.ClubManagement.Domain.Enums;
 
 public enum WeeklyDecisionType
 {
-    HireCoach,
-    StadiumInvestment,
-    MoraleBonus
+    HireCoach = 1,
+    StadiumInvestment = 2,
+    MoraleBonus = 3
 }

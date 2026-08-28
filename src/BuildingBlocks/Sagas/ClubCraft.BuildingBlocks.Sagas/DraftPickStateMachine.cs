@@ -1,6 +1,7 @@
 using MassTransit;
 using ClubCraft.BuildingBlocks.Contracts.Events;
 using ClubCraft.BuildingBlocks.Contracts.Commands;
+using Microsoft.Extensions.Configuration;
 
 namespace ClubCraft.BuildingBlocks.Sagas;
 
@@ -15,8 +16,14 @@ public class DraftPickStateMachine : MassTransitStateMachine<DraftPickState>
     public Event<IPlayerClaimRevertedEvent> PlayerClaimReverted { get; private set; } = null!;
     public Schedule<DraftPickState, IPickTimeoutEvent> PickTimeout { get; private set; } = null!;
 
-    public DraftPickStateMachine()
+    public DraftPickStateMachine(IConfiguration configuration)
     {
+        // Ortam bazlı timeout: Development=120s, Production=30s
+        // appsettings.json: DraftPick:PickTimeoutSeconds
+        var timeoutSeconds = 30; // production default
+        if (int.TryParse(configuration["DraftPick:PickTimeoutSeconds"], out var cfgTimeout) && cfgTimeout > 0)
+            timeoutSeconds = cfgTimeout;
+
         InstanceState(x => x.CurrentState);
 
         Event(() => PlayerClaimed, x => x.CorrelateById(context => context.Message.PickAttemptId));
@@ -26,7 +33,7 @@ public class DraftPickStateMachine : MassTransitStateMachine<DraftPickState>
 
         Schedule(() => PickTimeout, instance => instance.TimeoutTokenId, s =>
         {
-            s.Delay = TimeSpan.FromSeconds(30);
+            s.Delay = TimeSpan.FromSeconds(timeoutSeconds);
             s.Received = r => r.CorrelateById(context => context.Message.PickAttemptId);
         });
 
@@ -69,6 +76,12 @@ public class DraftPickStateMachine : MassTransitStateMachine<DraftPickState>
                 .TransitionTo(RevertingDraftClaim),
 
             When(PickTimeout.Received)
+                .Then(context =>
+                {
+                    // Timeout tetiklendi — bu Development'ta çok düşük timeout süresi anlamına gelebilir
+                    // Loglama: DraftPick:PickTimeoutSeconds değerini kontrol edin
+                    Console.WriteLine($"[WARN][Saga] PickTimeout fired! PickAttemptId={context.Saga.CorrelationId}, DraftSession={context.Saga.DraftSessionId}, Club={context.Saga.ClubId}, Player={context.Saga.PlayerId}. TimeoutSecs={timeoutSeconds}");
+                })
                 .SendAsync(new Uri("queue:draft-commands"), context => context.Init<IReleasePlayerClaimCommand>(new
                 {
                     PickAttemptId = context.Saga.CorrelationId,

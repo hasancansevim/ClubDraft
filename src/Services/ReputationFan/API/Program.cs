@@ -8,6 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Infrastructure (DbContext, Repositories)
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// MediatR
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ClubCraft.ReputationFan.Application.Queries.GetReputation.GetReputationQuery).Assembly));
+
 // MassTransit
 builder.Services.AddMassTransit(x =>
 {
