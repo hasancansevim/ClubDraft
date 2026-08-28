@@ -28,6 +28,18 @@ public class PlayerAddedToRosterEventConsumer : IConsumer<IPlayerAddedToRosterEv
             rep.AddReputation(1, $"Good Transfer: Player {msg.PlayerId} (Overall: {msg.Overall})");
         }
 
+        // AddReputation, esik asildiginda ReputationThresholdReachedEvent'i aggregate'in
+        // domain event listesine ekliyor — burada okuyup publish etmezsek event sessizce kaybolur
+        // (bkz. MatchSimulatedEventConsumer'daki dogru desen).
+        foreach (var evt in rep.DomainEvents)
+        {
+            if (evt is IReputationThresholdReachedEvent thresholdEvent)
+                await context.Publish<IReputationThresholdReachedEvent>(thresholdEvent);
+            else
+                await context.Publish((object)evt);
+        }
+        rep.ClearDomainEvents();
+
         await _repository.SaveAsync(rep);
     }
 }
