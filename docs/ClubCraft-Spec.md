@@ -490,8 +490,83 @@ Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) ol
 
 **Durum:** Draft ekranı (arama/filtre/sıralama, kadro sayacı, lineup sürükle-bırak,
 sayfa yenileme sonrası state korunumu, çoklu-istemci senkronizasyonu, Saga
-timeout düzeltmesi) uçtan uca doğrulandı ve **tamamlandı**. Sırada: ClubId akışı
-zaten kapatılmıştı; şimdi Sezon Dashboard, Sponsorluk, Özet ekranları.
+timeout düzeltmesi) uçtan uca doğrulandı ve **tamamlandı**. ClubId akışı
+zaten kapatılmıştı.
+
+> 🎯 **Kök sebep bulundu ve kapatıldı (birkaç günlük tekrarlayan Draft bug'larının
+> gerçek ortak kökeni):** `ClubManagement` ve `Draft` servislerinde birden fazla
+> `ReceiveEndpoint`'te `UseEntityFrameworkOutbox<...>(context)` çağrısı **eksikti**
+> (`club-management-commands`, `draft-commands`, `draft-events`). Sonuç: bu
+> endpoint'lerden yayınlanan integration event'ler (`PlayerAddedToRosterEvent`
+> dahil) Outbox'ı bypass ediyordu, Saga bunları hiç göremiyor, her pick 120s
+> timeout'a düşüp `RevertClaim` ile geri alınıyordu — "kadro sıfırlanıyor,
+> aynı oyuncu tekrar seçilebiliyor" olarak yansıyordu. **Sistematik tarama**
+> (tüm servislerin tüm `ReceiveEndpoint`'leri tek tek listelenip Outbox
+> varlığı kontrol edilerek) ile bulundu ve düzeltildi. `DraftSession.RevertClaim()`
+> tasarımı (Insert/"makeup pick", index'e dokunma) doğru olduğu teyit edilip
+> korundu. **Doğrulama:** İki kulüp de 20/20 kadroyu, hiçbir deadlock
+> yaşanmadan tamamladı (ekran görüntüsüyle kanıtlandı).
+> **Ders:** Bir serviste bir endpoint'te unutulan bir konfigürasyon
+> (Outbox gibi), o servisin **diğer** endpoint'lerinde de unutulmuş olabilir —
+> bulunca hemen tüm servisler için sistematik tarama yapılmalı, sadece
+> bulunan yeri düzeltip geçilmemeli.
+
+**UI Polish turu:** Debug paneli kaldırıldı (artık gerekmiyor, kök sebep
+bulunduğu için), `alert()` → Toast sistemi, FUT-style oyuncu kartları,
+Orbitron/Rajdhani font sistemi, glassmorphism/animasyonlar eklendi.
+
+**Sezon Dashboard — TAMAMLANDI:**
+- **1. Faz** — Üst özet şeridi (Bütçe/İtibar/Hafta/Sıralama), Kadro
+  (saha+yedekler görünümü), Haftalık Kararlar paneli (HireCoach/
+  StadiumInvestment/MoraleBonus) — doğrulandı (bütçe/itibar DB ile eşleşiyor,
+  bir enum mapping hatası bulunup düzeltildi).
+- **2. Faz** — "Hazırım" akışı, maç simülasyonu, hafta ilerletme, lig tablosu —
+  Playwright ile gerçek bir tarayıcıda iki ayrı browser context (iki istemci)
+  kullanılarak otomatik uçtan uca test edildi: draft API üzerinden tamamlandı
+  (40 pick), her iki istemci de Season Dashboard'a düştü, ikisi de "Hazırım"
+  butonuna bastı, maç simülasyonu tetiklendi. DB'den doğrulandı: `Match`
+  tablosunda `IsPlayed=true`, skor 3-0; itibar skorları maç sonucuna göre
+  güncellendi (kazanan 35→38, kaybeden 35→25).
+
+Sonra: Sponsorluk, Özet ekranları.
+
+> 💡 **İki ders (Sezon Dashboard Faz 2 testinde bulundu, 2026-08-28):**
+> 1. **shortCode/RoomId karışıklığı tekrarlandı** — Lobi/Draft'ta çözdüğümüz
+>    "URL'deki kısa kodu API çağrılarında doğrudan kullanma" hatası Sezon
+>    Dashboard'da da yapılmıştı: `SeasonDashboard.tsx`'in `handleReadyClick`'i
+>    `roomId` (aslında short code, örn. `TIGER42`) ile
+>    `POST /api/sessions/{id:guid}/ready` çağırıyordu — route `:guid`
+>    constraint'i taşıdığı için bu istek her zaman 404 dönüyordu. **Ders:**
+>    Yeni bir sayfa/ekran eklenirken, "kısa kod → gerçek RoomId çözümleme"
+>    adımının (Lobi/Draft'taki `realRoomId` deseni) o sayfada da uygulandığı
+>    açıkça kontrol edilmeli — bu bir kerelik düzeltme değil, her yeni route
+>    için tekrar edilmesi gereken bir kalıp. Düzeltme, iki-istemci Playwright
+>    testiyle doğrulandı (bkz. yukarı).
+> 2. **Migration'ların "servis ayakta = migration uygulanmış" varsayımı
+>    yanlıştı** — 6 servisin (Session, Draft, FinanceSponsorship, MatchEngine,
+>    ReputationFan, SagaOrchestrator) DB'sinde migration hiç uygulanmamışken
+>    bile servisler hatasız başlıyordu (`OutboxState` tablosu olmadan, arka
+>    planda sessizce hata veriyorlardı). **Kalıcı çözüm:** `start_services.ps1`
+>    artık servisleri başlatmadan önce `tests/run_migrations.ps1`'i (tüm
+>    servisler için `dotnet ef database update`) senkron çalıştırıyor,
+>    başarısız olursa servisleri hiç başlatmıyor.
+
+> ⚠️ **Açık konu — düşük öncelik (Sezon Dashboard testinde gözlemlendi):**
+> Draft/ClubManagement arasındaki "geç gelen başarı" race condition koruması
+> (bkz. §4.9 — `RevertingDraftClaim` state'inde geç `PlayerAddedToRosterEvent`
+> gelirse `ReleasePlayerFromRosterCommand` ile telafi) soğuk başlangıçta
+> (servisler yeni ayağa kalkarken) tetiklenmemiş gibi görünüyor — Draft ve
+> ClubManagement roster sayıları geçici olarak ayrışmıştı (19 vs 20).
+> `start_services.ps1` ile servisleri sıcak tutmak bunu pratikte nadirleştiriyor.
+> **Zaman bulununca:** `DraftPickStateMachine`'deki `RevertingDraftClaim` state
+> handler'ının gerçekten `ReleasePlayerFromRosterCommand` gönderdiğini
+> doğrulamak/düzeltmek gerekiyor. Bloklayıcı değil, sonraki fazları engellemiyor.
+
+**Commit'ler (2026-08-28):** Bu iki düzeltme bilinçli olarak ayrı commit'lere
+bölündü, çünkü nedenleri farklı ("bug fix" vs "kalıcı altyapı iyileştirmesi")
+ve git geçmişinde ayrı ayrı okunabilir olmalı:
+- `fix(frontend): resolve real RoomId on Season Dashboard before API calls`
+- `feat(scripts): auto-run EF migrations before starting services`
 
 ## 5. Teknoloji Yığını
 
