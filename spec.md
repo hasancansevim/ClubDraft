@@ -11,6 +11,7 @@ ClubCraft, arkadaş gruplarının (4-6 kişi) her birinin bir futbol kulübünü
 **Tip:** Sezonluk Draft — kapalı devre, tek sezon oynanır, biter.
 
 ### Akış
+
 1. **Oda Kurma** — Host bir oda açar, 4-6 kişi katılır, her biri bir kulüp seçer/oluşturur.
 2. **Draft Fazı** — Katılımcılar sırayla oyuncu havuzundan kadrolarını oluşturur (gerçek zamanlı, SignalR ile herkese anlık yansır).
 3. **Sezon Fazı** — 10-14 hafta sürer. Her hafta:
@@ -21,6 +22,7 @@ ClubCraft, arkadaş gruplarının (4-6 kişi) her birinin bir futbol kulübünü
 4. **Sezon Sonu** — Lig sıralaması + "Başkanlık Skoru" (lig performansı + itibar + finansal sağlık bileşik skoru) ile final değerlendirme yapılır.
 
 ### Lig Yapısı
+
 - Sadece gerçek oyuncular birbirine karşı oynar (bot takım yok)
 - 4-6 takımlık mini lig, round-robin fikstür
 
@@ -29,11 +31,13 @@ ClubCraft, arkadaş gruplarının (4-6 kişi) her birinin bir futbol kulübünü
 ## 3. Oyun Mekanikleri
 
 ### 3.1 Kulüp (Club)
+
 - **Bütçe** (başlangıç bütçesi — eşit veya kulüp prestijine göre değişken, TBD)
 - **İtibar / Taraftar Skoru**
 - **Kadro** (draft ile oluşturulan oyuncu listesi)
 
 ### 3.2 Oyuncu (Player) — Basitleştirilmiş Öznitelikler
+
 - **Overall (Genel Güç)** — tek bir sayısal değer
 - **Mevki** — GK / DEF / MID / FWD (kaba kategori, detaylı taktik rolleri yok)
 - **Yaş**
@@ -42,48 +46,56 @@ ClubCraft, arkadaş gruplarının (4-6 kişi) her birinin bir futbol kulübünü
 > Not: Match Engine'in basit kalması gerektiği için (takım gücü + ağırlıklı random simülasyon), detaylı taktik öznitelikleri (pas, şut, dribling vb.) bilinçli olarak dışarıda bırakılmıştır.
 
 ### 3.3 Draft Sistemi
+
 - Sezon başında tek seferlik, sıralı draft
 - Sezon içinde serbest transfer market **yok** (kapsam dışı bırakıldı, karmaşıklığı azaltmak için)
 - Draft sırasında aynı oyuncuya çakışan seçim → concurrency problemi (mimari açıdan kritik nokta)
 
 ### 3.4 Haftalık İş Kararları
+
 Sezon içi bütçe/itibar mekaniğine anlam katmak için:
+
 - **Antrenör/Staff kiralama** — bütçeden düşer, maç gücüne küçük bonus
 - **Taraftar etkinliği / stadyum yatırımı** — bütçeden düşer, itibarı artırır
 - **Moral/prim ödemesi** — tek seferlik maç öncesi güç bonusu
 
 ### 3.5 Sponsorluk
+
 - İtibar eşiği aşılınca sistem otomatik sponsorluk teklifi üretir (event tetikli)
 - Başkan teklifi kabul/red eder → kabul ederse bütçeye ek gelir girer
 
 ### 3.6 Maç Simülasyonu
+
 - Basit: takım gücü ortalaması + ağırlıklı random
 - Karmaşık taktik motoru **yok**
 - Sonuç gösterimi: canlı animasyon değil, olay akışı / maç özeti (örn. "23. dakika gol!")
 
 ### 3.7 Final Değerlendirme
+
 - **Başkanlık Skoru** = Lig performansı + toplam itibar + finansal sağlık (bileşik skor)
 
 ---
 
 ## 4. Mimari — Servisler
 
-| Servis | Mimari Stili | Sorumluluk | Veritabanı | Kritik Nokta |
-|---|---|---|---|---|
-| **Session** | Clean Architecture | Oda kurma, kulüp seçimi, katılımcı yönetimi, ready-check | PostgreSQL | Senkron "herkes hazır" orkestrasyonu |
-| **Draft** | Clean Architecture | Draft sırası, oyuncu havuzu, seçim yönetimi | PostgreSQL | **Concurrency kritik**: çakışan oyuncu seçimi, Redis distributed lock |
-| **Club Management** | Clean Architecture | Kulüp, kadro, bütçe, haftalık iş kararları (aggregate root) | PostgreSQL | Draft ile Saga ilişkisi (bütçe rezervasyonu) |
-| **Match Engine** | Vertical Slice | Fikstür üretimi, haftalık maç simülasyonu | PostgreSQL | Basit tutulmalı, taktik motoru değil |
-| **Reputation & Fan** | Event-driven (hafif) | İtibar/taraftar skoru, diğer servislerin event'lerini dinler | PostgreSQL / hafif key-value | Event tüketici |
-| **Finance & Sponsorship** | N-Layered | Bütçe hareketleri, event-tetikli sponsorluk teklifleri | PostgreSQL | Event tetikli iş akışı |
-| **API Gateway** | YARP | Frontend'in tek giriş noktası | — | — |
-| **Realtime Hub** | SignalR | Draft sırası + hafta ilerleme yayını | — (Redis backplane) | Çoklu instance senkronu |
+| Servis                    | Mimari Stili         | Sorumluluk                                                   | Veritabanı                   | Kritik Nokta                                                          |
+| ------------------------- | -------------------- | ------------------------------------------------------------ | ---------------------------- | --------------------------------------------------------------------- |
+| **Session**               | Clean Architecture   | Oda kurma, kulüp seçimi, katılımcı yönetimi, ready-check     | PostgreSQL                   | Senkron "herkes hazır" orkestrasyonu                                  |
+| **Draft**                 | Clean Architecture   | Draft sırası, oyuncu havuzu, seçim yönetimi                  | PostgreSQL                   | **Concurrency kritik**: çakışan oyuncu seçimi, Redis distributed lock |
+| **Club Management**       | Clean Architecture   | Kulüp, kadro, bütçe, haftalık iş kararları (aggregate root)  | PostgreSQL                   | Draft ile Saga ilişkisi (bütçe rezervasyonu)                          |
+| **Match Engine**          | Vertical Slice       | Fikstür üretimi, haftalık maç simülasyonu                    | PostgreSQL                   | Basit tutulmalı, taktik motoru değil                                  |
+| **Reputation & Fan**      | Event-driven (hafif) | İtibar/taraftar skoru, diğer servislerin event'lerini dinler | PostgreSQL / hafif key-value | Event tüketici                                                        |
+| **Finance & Sponsorship** | N-Layered            | Bütçe hareketleri, event-tetikli sponsorluk teklifleri       | PostgreSQL                   | Event tetikli iş akışı                                                |
+| **API Gateway**           | YARP                 | Frontend'in tek giriş noktası                                | —                            | —                                                                     |
+| **Realtime Hub**          | SignalR              | Draft sırası + hafta ilerleme yayını                         | — (Redis backplane)          | Çoklu instance senkronu                                               |
 
 ### Servis-arası İletişim
+
 - **RabbitMQ + MassTransit** — asenkron event iletişimi
 - **Saga Pattern** (MassTransit State Machine) — Draft ↔ Club Management arası bütçe rezervasyonu / geri alma senaryosu için
 
 ### Örnek Domain Event'ler (taslak, detaylandırılacak)
+
 - `PlayerDrafted`
 - `WeekAdvanced`
 - `MatchSimulated`
@@ -105,6 +117,7 @@ Sezon içi bütçe/itibar mekaniğine anlam katmak için:
 ## 4.6 Aggregate Root & Domain Event Tasarımı
 
 ### Session Servisi
+
 **Aggregate Root: `GameRoom`** — RoomId, HostUserId, Status (Lobby/DraftPhase/SeasonPhase/Completed), Participants[] (ParticipantId, UserId, ClubName, IsReady), CurrentWeek
 
 Domain Events: `RoomCreated`, `ParticipantJoined`, `AllParticipantsReadyForDraft`, `AllParticipantsReadyForNextWeek`, `WeekAdvanced`, `SeasonEnded`
@@ -112,6 +125,7 @@ Domain Events: `RoomCreated`, `ParticipantJoined`, `AllParticipantsReadyForDraft
 Ready-check mantığı burada yaşar (hem draft başlangıcı hem hafta ilerlemesi için ortak desen).
 
 ### Draft Servisi
+
 **Aggregate Root: `DraftSession`** — DraftSessionId, RoomId, Status, TurnOrder[] (snake sıra), CurrentPickIndex, PlayerPool[] (PlayerId, PlayerSnapshot, IsClaimed), Picks[] (PickNumber, ClubId, PlayerId, ClaimedAt)
 
 **Value Object:** `PlayerSnapshot` (Name, Position, Overall, Age, MarketValue — draft anında donmuş kopya)
@@ -121,6 +135,7 @@ Domain Events: `DraftStarted`, `PlayerClaimed`, `PlayerClaimRejected` (Reason: s
 **Concurrency koruması:** Optimistic concurrency (RowVersion) + CurrentPickIndex kontrolü + Redis distributed lock (aynı draft session için eşzamanlı istekleri serileştirir).
 
 ### Club Management Servisi
+
 **Aggregate Root: `Club`** — ClubId, RoomId, PresidentUserId, Name, Budget (Money VO), Roster[] (draft'tan gelen kalıcı kopya), WeeklyDecisions[] (history)
 
 **Sabit haftalık karar kataloğu:** `HireCoach` (maliyet → maç gücü bonusu), `StadiumInvestment` (maliyet → itibar artışı), `MoraleBonus` (maliyet → tek seferlik maç gücü bonusu)
@@ -128,6 +143,7 @@ Domain Events: `DraftStarted`, `PlayerClaimed`, `PlayerClaimRejected` (Reason: s
 Domain Events: `ClubInitialized` (StartingBudget eşit), `PlayerAddedToRoster`, `PlayerRosterAdditionFailed` (Saga compensating tetikleyici), `WeeklyDecisionMade`, `BudgetDebited` / `BudgetCredited`
 
 ### Match Engine Servisi
+
 **Aggregate Root: `Fixture`** — RoomId, Matches[] (Week, HomeClubId, AwayClubId, HomeScore, AwayScore, KeyEvents[])
 
 **Value Object:** `MatchEvent` (Minute, Type=Goal/Card, ClubId)
@@ -137,6 +153,7 @@ Domain Events: `FixtureGenerated`, `MatchSimulated`, `WeekSimulationCompleted`
 Kulüp gücünü `PlayerAddedToRoster` ve `WeeklyDecisionMade` event'lerini dinleyerek kendi local read-model'inde (ClubPowerRating) hesaplar — ClubManagement'a senkron sorgu atılmaz.
 
 ### Reputation & Fan Servisi
+
 **Aggregate Root: `ClubReputation`** — ClubId, Score, History[]
 
 Dinlediği event'ler: `PlayerAddedToRoster`, `WeeklyDecisionMade`, `MatchSimulated`
@@ -144,6 +161,7 @@ Dinlediği event'ler: `PlayerAddedToRoster`, `WeeklyDecisionMade`, `MatchSimulat
 Domain Events: `ReputationChanged`, `ReputationThresholdReached`
 
 ### Finance & Sponsorship Servisi
+
 **Aggregate Root: `SponsorshipOffer`** — OfferId, ClubId, Amount, Status (Pending/Accepted/Rejected/Expired), ExpiresAt
 
 Tetikleyici: `ReputationThresholdReached` dinlenir, otomatik teklif üretilir.
@@ -172,6 +190,7 @@ MassTransit State Machine ile uygulanacak somut Saga senaryosu:
 ## 4.8 Endpoint Taslakları (Request/Response)
 
 ### Session Servisi
+
 ```
 POST /rooms
   Request:  { hostUserId: string, maxParticipants: int }
@@ -190,6 +209,7 @@ GET /rooms/{roomId}
 ```
 
 ### Draft Servisi
+
 ```
 POST /draft-sessions/{roomId}/start
   Response: { draftSessionId, turnOrder: [clubId...] }
@@ -206,6 +226,7 @@ GET /draft-sessions/{draftSessionId}/state
 ```
 
 ### Club Management Servisi
+
 ```
 GET /clubs/{clubId}
   Response: { clubId, name, budget, roster: [...], reputation }
@@ -219,6 +240,7 @@ GET /clubs/{clubId}/decisions-history
 ```
 
 ### Match Engine Servisi
+
 ```
 POST /fixtures/{roomId}/generate
   Response: { schedule: [{ week, matches: [{ homeClubId, awayClubId }] }] }
@@ -231,6 +253,7 @@ GET /fixtures/{roomId}/standings
 ```
 
 ### Finance & Sponsorship Servisi
+
 ```
 GET /clubs/{clubId}/sponsorship-offers
   Response: { offers: [{ offerId, amount, status, expiresAt }] }
@@ -261,6 +284,7 @@ POST /sponsorship-offers/{offerId}/respond
 **Timeout:** `AddingToRoster` state'ine girerken MassTransit `UseDelayedMessageScheduler` (RabbitMQ delayed exchange, `Dockerfile.rabbitmq` ile etkinleştirilir) ile 30 saniyelik timeout zamanlanır. Başarı/hata event'i gelirse `Unschedule` edilir.
 
 **State Diyagramı:**
+
 ```text
 (Start)
    |
@@ -299,6 +323,7 @@ POST /sponsorship-offers/{offerId}/respond
 ---
 
 **Doğrulanmış (E2E test edildi):** Draft ↔ ClubManagement ↔ SagaOrchestrator üçgeni, gerçek Docker altyapısı üzerinde uçtan uca test edildi (draft başlat → oyuncu claim et → Saga → roster'a doğru veriyle ekleme). Karşılaşılan ve çözülen gerçek hatalar:
+
 - EF Core, dışarıdan `Guid` ID verilen owned entity'lerde `Insert`'i `Update` sanabilir → `ValueGeneratedNever()` ile düzeltildi.
 - Saga state'indeki `Version`/concurrency kolonu PostgreSQL'de `.IsRowVersion()` değil `.IsConcurrencyToken()` (int tipi) ile yapılandırılmalı.
 - Domain event → integration event dönüşümünde value object alanları (örn. `PlayerSnapshot`'ın Name/Position/Overall/Age/MarketValue'su) elle map'lenirken unutulabilir — her yeni event eklerken bu mapping'in tam olduğu satır satır kontrol edilmeli.
@@ -367,6 +392,7 @@ zinciri xmin/optimistic-concurrency ile). Kalan: RealtimeHub (SignalR), API Gate
 Sekiz servisin tamamı (Draft, ClubManagement, MatchEngine, ReputationFan,
 FinanceSponsorship, Session, SagaOrchestrator, RealtimeHub) + API Gateway (YARP),
 gerçek Docker altyapısında, sentetik olmayan uçtan uca senaryolarla doğrulandı:
+
 - Draft→ClubManagement Saga (concurrency, timeout, compensating action)
 - ClubManagement→MatchEngine→ReputationFan→FinanceSponsorship→ClubManagement
   event zinciri (Outbox/Inbox ile atomik ve idempotent)
@@ -413,6 +439,7 @@ Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) ol
 ### 6.2 Frontend İlerleme Durumu (güncel)
 
 **Tamamlanan:**
+
 - Proje iskeleti (Vite + React + TS), routing, tasarım sistemi (§6.1) uygulandı
 - Ana Sayfa: "Oda Kur" ve "Odaya Katıl" (kısa kod), gerçek API'ye bağlı
 - API client katmanı (`src/api/sessionApi.ts`) ve SignalR hook'u (`src/hooks/useSignalR.ts`)
@@ -428,11 +455,18 @@ Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) ol
 > payload'ı ile asıl sebep görülmeli.
 
 **Sırada:**
-1. "Hazırım" butonu — tıklanınca kendi durumu ve diğer katılımcıların ekranında
-   anlık güncellenmesi; herkes hazır olunca otomatik Draft sayfasına yönlendirme
-   (`AllParticipantsReadyForDraft` → SignalR → frontend routing)
-2. Draft ekranı — sıra göstergesi, oyuncu havuzu, seçim butonu, canlı güncellemeler
-   (`onPlayerClaimed`, `onDraftTurnAdvanced`, `onPlayerClaimRejected`)
+
+1. ~~"Hazırım" butonu~~ ✅ Tamamlandı — canlı senkron doğrulandı
+2. ~~Draft ekranı~~ ✅ Tamamlandı — iki gizli pencereyle gerçek zamanlı seçim/sıra
+   güncelleme kanıtlandı (ekran görüntüleriyle)
+3. **ClubId teknik borcunun kapatılması** (yukarıdaki nota bkz.) — Sezon
+   Dashboard'a geçmeden önce yapılmalı, çünkü bütçe/roster gerçek `Club`
+   verisine bağlı olacak
+4. Sezon Dashboard, Sponsorluk, Özet ekranları
+5. UI/UX zenginleştirme: arama/filtre/sıralama (oyuncu havuzu), native
+   `alert()` yerine tasarım sistemine uygun toast/modal, genel görsel
+   zenginlik — kullanıcı bunu bilinçli olarak "önce çekirdek döngü" sonrasına
+   erteledi
 
 > 🚨 **Ciddi regresyon notu (frontend Lobi entegrasyonunda git geçmişi taranarak
 > bulundu):** Bir önceki oturumda, RealtimeHub E2E testindeki bir zamanlama
@@ -461,6 +495,108 @@ Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) ol
 > ClubManagement'ın `InitializeClub` çağrısını ekleyip, dönen gerçek `ClubId`'yi
 > Session'a/Draft'a taşıyan bir düzeltme turu planlanmalı.
 
+> 📌 **Oyuncu havuzu veri kaynağı notu:** Draft servisinin oyuncu havuzu, Kaggle'daki
+> "EA Sports FC 24 Complete Player Dataset" (sofifa.com'dan derlenmiş, topluluk
+> kaynaklı) baz alınarak oluşturuldu — 8 lig (Premier League, La Liga, Serie A,
+> Bundesliga, Ligue 1, Süper Lig, Primeira Liga, Saudi Pro League), overall
+> eşiği Saudi Pro League için ≥78, diğerleri için ≥68. Bu, gerçek oyuncu
+> isimleri/verileri içerir — bilinçli bir risk kabulüyle kullanılmıştır
+> (kişisel/portfolyo projesi, ticari amaç yok). Yayınlarken/paylaşırken bu
+> şeffaf şekilde belirtilmeli.
+
+> 🚨 **Saga timeout / ortam-duyarsız sabit değer notu (frontend Draft turlarında bulundu):**
+> `DraftPickStateMachine`'deki 30 saniyelik sabit `s.Delay` (Saga timeout), geliştirme
+> ortamındaki sık servis yeniden başlatmaları + soğuk RabbitMQ/DB bağlantıları
+> yüzünden **erken tetikleniyordu** — tamamlanmış pick'ler `RevertClaim` ile geri
+> alınıyor, kullanıcıya "kadro sıfırlanıyor, oyuncu tekrar seçilebilir oldu" olarak
+> yansıyordu. **Kanıt:** SagaOrchestrator DB'sinde 50+ kayıt `RevertingDraftClaim`
+> state'inde takılı bulundu. **Kalıcı çözüm:** Timeout süresi `appsettings.json`'a
+> taşındı (`DraftPick:PickTimeoutSeconds`), production'da 30s, development'ta 120s.
+> **Ders:** Saga/timeout gibi zamanlamaya dayalı sabitler asla hardcode edilmemeli,
+> ortam bazlı konfigüre edilebilir olmalı — geliştirme ortamının doğası
+> (sık restart, soğuk başlangıç) production'dan farklıdır.
+
+> 🎯 **Kök sebep bulundu ve kapatıldı (birkaç günlük tekrarlayan Draft bug'larının
+> gerçek ortak kökeni):** `ClubManagement` ve `Draft` servislerinde birden fazla
+> `ReceiveEndpoint`'te `UseEntityFrameworkOutbox<...>(context)` çağrısı **eksikti**
+> (`club-management-commands`, `draft-commands`, `draft-events`). Sonuç: bu
+> endpoint'lerden yayınlanan integration event'ler (`PlayerAddedToRosterEvent`
+> dahil) Outbox'ı bypass ediyordu, Saga bunları hiç göremiyor, her pick 120s
+> timeout'a düşüp `RevertClaim` ile geri alınıyordu — "kadro sıfırlanıyor,
+> aynı oyuncu tekrar seçilebiliyor" olarak yansıyordu. **Sistematik tarama**
+> (tüm servislerin tüm `ReceiveEndpoint`'leri tek tek listelenip Outbox
+> varlığı kontrol edilerek) ile bulundu ve düzeltildi. `DraftSession.RevertClaim()`
+> tasarımı (Insert/"makeup pick", index'e dokunma) doğru olduğu teyit edilip
+> korundu. **Doğrulama:** İki kulüp de 20/20 kadroyu, hiçbir deadlock
+> yaşanmadan tamamladı (ekran görüntüsüyle kanıtlandı).
+> **Ders:** Bir serviste bir endpoint'te unutulan bir konfigürasyon
+> (Outbox gibi), o servisin **diğer** endpoint'lerinde de unutulmuş olabilir —
+> bulunca hemen tüm servisler için sistematik tarama yapılmalı, sadece
+> bulunan yeri düzeltip geçilmemeli.
+
+**Durum: Draft ekranı TAM OLARAK TAMAMLANDI** ✅ (kök sebep dahil, 20/20 kadro
+kanıtlı). ClubId akışı zaten kapatılmıştı.
+
+**UI Polish turu (Sonnet, Antigravity'de):** Debug paneli kaldırıldı (artık
+gerekmiyor, kök sebep bulunduğu için), `alert()` → Toast sistemi, FUT-style
+oyuncu kartları, Orbitron/Rajdhani font sistemi, glassmorphism/animasyonlar
+eklendi. Gerçek ekran görüntüsüyle doğrulanması bekleniyor.
+
+**Sezon Dashboard — TAMAMLANDI:**
+
+- **1. Faz** — Üst özet şeridi (Bütçe/İtibar/Hafta/Sıralama), Kadro (saha+yedekler
+  görünümü, Draft ekranından yeniden kullanıldı), Haftalık Kararlar paneli
+  (HireCoach/StadiumInvestment/MoraleBonus) — doğrulandı (bütçe/itibar DB ile
+  eşleşiyor, bir enum mapping hatası bulunup düzeltildi).
+- **2. Faz** — "Hazırım" akışı, maç simülasyonu, hafta ilerletme, lig tablosu —
+  Playwright ile gerçek bir tarayıcıda iki ayrı browser context (iki istemci)
+  kullanılarak otomatik uçtan uca test edildi: draft API üzerinden tamamlandı
+  (40 pick), her iki istemci de Season Dashboard'a düştü, ikisi de "Hazırım"
+  butonuna bastı, maç simülasyonu tetiklendi. DB'den doğrulandı: `Match`
+  tablosunda `IsPlayed=true`, skor 3-0; itibar skorları maç sonucuna göre
+  güncellendi (kazanan 35→38, kaybeden 35→25).
+
+Sonra: Sponsorluk, Özet ekranları.
+
+> 💡 **İki ders (Sezon Dashboard Faz 2 testinde bulundu, 2026-08-28):**
+> 1. **shortCode/RoomId karışıklığı tekrarlandı** — Lobi/Draft'ta çözdüğümüz
+>    "URL'deki kısa kodu API çağrılarında doğrudan kullanma" hatası Sezon
+>    Dashboard'da da yapılmıştı: `SeasonDashboard.tsx`'in `handleReadyClick`'i
+>    `roomId` (aslında short code, örn. `TIGER42`) ile
+>    `POST /api/sessions/{id:guid}/ready` çağırıyordu — route `:guid`
+>    constraint'i taşıdığı için bu istek her zaman 404 dönüyordu. **Ders:**
+>    Yeni bir sayfa/ekran eklenirken, "kısa kod → gerçek RoomId çözümleme"
+>    adımının (Lobi/Draft'taki `realRoomId` deseni) o sayfada da uygulandığı
+>    açıkça kontrol edilmeli — bu bir kerelik düzeltme değil, her yeni route
+>    için tekrar edilmesi gereken bir kalıp. Düzeltme, iki-istemci Playwright
+>    testiyle doğrulandı (bkz. yukarı).
+> 2. **Migration'ların "servis ayakta = migration uygulanmış" varsayımı
+>    yanlıştı** — 6 servisin (Session, Draft, FinanceSponsorship, MatchEngine,
+>    ReputationFan, SagaOrchestrator) DB'sinde migration hiç uygulanmamışken
+>    bile servisler hatasız başlıyordu (`OutboxState` tablosu olmadan, arka
+>    planda sessizce hata veriyorlardı). **Kalıcı çözüm:** `start_services.ps1`
+>    artık servisleri başlatmadan önce `tests/run_migrations.ps1`'i (tüm
+>    servisler için `dotnet ef database update`) senkron çalıştırıyor,
+>    başarısız olursa servisleri hiç başlatmıyor.
+
+> ⚠️ **Açık konu — düşük öncelik (Sezon Dashboard testinde gözlemlendi):**
+> Draft/ClubManagement arasındaki "geç gelen başarı" race condition koruması
+> (bkz. §4.9 — `RevertingDraftClaim` state'inde geç `PlayerAddedToRosterEvent`
+> gelirse `ReleasePlayerFromRosterCommand` ile telafi) soğuk başlangıçta
+> (servisler yeni ayağa kalkarken) tetiklenmemiş gibi görünüyor — Draft ve
+> ClubManagement roster sayıları geçici olarak ayrışmıştı (19 vs 20).
+> `start_services.ps1` ile servisleri sıcak tutmak bunu pratikte nadirleştiriyor.
+> **Zaman bulununca:** `DraftPickStateMachine`'deki `RevertingDraftClaim` state
+> handler'ının gerçekten `ReleasePlayerFromRosterCommand` gönderdiğini
+> doğrulamak/düzeltmek gerekiyor. Bloklayıcı değil, sonraki fazları engellemiyor.
+
+**Commit'ler (2026-08-28):** Bu iki düzeltme bilinçli olarak ayrı commit'lere
+bölündü, çünkü nedenleri farklı ("bug fix" vs "kalıcı altyapı iyileştirmesi")
+ve git geçmişinde ayrı ayrı okunabilir olmalı:
+
+- `fix(frontend): resolve real RoomId on Season Dashboard before API calls`
+- `feat(scripts): auto-run EF migrations before starting services`
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
@@ -470,26 +606,27 @@ Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) ol
 > Ayrıca connection string'lerde `localhost` yerine `127.0.0.1` kullanılmalı
 > (Windows'ta IPv6 çözümleme sorunlarını önlemek için).
 
-| Katman | Teknoloji |
-|---|---|
-| Backend | .NET 8 |
-| Mimari Desenler | Clean Architecture, Vertical Slice, CQRS + MediatR, N-Layered (servise göre değişken) |
-| Veritabanı | PostgreSQL (database-per-service, her serviste ayrı instance) |
-| Mesajlaşma | RabbitMQ + MassTransit |
-| Cache / Lock | Redis (distributed lock + SignalR backplane) |
-| Gerçek Zamanlı | SignalR |
-| Gateway | YARP |
-| ORM | EF Core |
-| Validasyon | FluentValidation |
-| Mapping | Mapster |
-| Containerization | Docker Compose |
-| Frontend | React veya Angular (backend tamamlanınca kesinleştirilecek — kullanıcının Angular deneyimi var, React de değerlendiriliyor) |
+| Katman           | Teknoloji                                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Backend          | .NET 8                                                                                                                      |
+| Mimari Desenler  | Clean Architecture, Vertical Slice, CQRS + MediatR, N-Layered (servise göre değişken)                                       |
+| Veritabanı       | PostgreSQL (database-per-service, her serviste ayrı instance)                                                               |
+| Mesajlaşma       | RabbitMQ + MassTransit                                                                                                      |
+| Cache / Lock     | Redis (distributed lock + SignalR backplane)                                                                                |
+| Gerçek Zamanlı   | SignalR                                                                                                                     |
+| Gateway          | YARP                                                                                                                        |
+| ORM              | EF Core                                                                                                                     |
+| Validasyon       | FluentValidation                                                                                                            |
+| Mapping          | Mapster                                                                                                                     |
+| Containerization | Docker Compose                                                                                                              |
+| Frontend         | React veya Angular (backend tamamlanınca kesinleştirilecek — kullanıcının Angular deneyimi var, React de değerlendiriliyor) |
 
 ---
 
 ## 6. Bilinçli Olarak Kapsam Dışı Bırakılanlar (Scope Cuts)
 
 Projenin CV/mimari odağını korumak için şu karmaşıklıklar bilinçli olarak dışarıda bırakılmıştır:
+
 - Detaylı taktik motoru (pas, şut, dribling bazlı simülasyon)
 - Sezon içi serbest transfer market
 - Sürekli/kalıcı dünya (çoklu sezon, oyuncu yaşlanması)
@@ -513,4 +650,4 @@ Projenin CV/mimari odağını korumak için şu karmaşıklıklar bilinçli olar
 
 ---
 
-*Bu doküman, proje ilerledikçe güncellenecek canlı bir referans dokümanıdır.*
+_Bu doküman, proje ilerledikçe güncellenecek canlı bir referans dokümanıdır._
