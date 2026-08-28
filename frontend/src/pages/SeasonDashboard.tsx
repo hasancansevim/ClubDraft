@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { sessionApi } from '../api/sessionApi';
-import { seasonApi, type ClubDetails, type TeamStanding } from '../api/seasonApi';
+import { seasonApi, type ClubDetails, type TeamStanding, type FixtureMatch } from '../api/seasonApi';
 import { toast } from '../App';
 import { useSignalR } from '../hooks/useSignalR';
 
@@ -30,6 +30,7 @@ export const SeasonDashboard = () => {
   const [clubDetails, setClubDetails] = useState<ClubDetails | null>(null);
   const [reputation, setReputation] = useState<number>(0);
   const [standings, setStandings] = useState<TeamStanding[]>([]);
+  const [fixture, setFixture] = useState<FixtureMatch[]>([]);
   const [lineup, setLineup] = useState<Record<string, string | null>>({});
 
   const [participants, setParticipants] = useState<any[]>([]);
@@ -54,7 +55,7 @@ export const SeasonDashboard = () => {
       setMatchResult(data);
     },
     onWeekAdvanced: (data) => {
-      toast("info", `Hafta ${data.week} sim�lasyonu tamamland�!`);
+      toast("info", `Hafta ${data.week} simülasyonu tamamlandı!`);
       setIsReady(false);
       setMatchResult(null);
       fetchDashboardData();
@@ -108,11 +109,13 @@ export const SeasonDashboard = () => {
       setClubId(cId);
 
       // 2. Fetch all other required data
-      const [club, rep, stds] = await Promise.all([
+      const [club, rep, stds, fix] = await Promise.all([
         seasonApi.getClub(cId),
         seasonApi.getReputation(cId).catch(() => 0),
-        seasonApi.getStandings(room.id).catch(() => [])
+        seasonApi.getStandings(room.id).catch(() => []),
+        seasonApi.getFixture(room.id).catch(() => [])
       ]);
+      setFixture(fix);
 
       setClubDetails(club);
       setReputation(rep);
@@ -394,7 +397,7 @@ export const SeasonDashboard = () => {
 
       {matchResult && (
         <div className="cc-card" style={{ marginBottom: "1.5rem", padding: "1.5rem", background: "linear-gradient(135deg, rgba(57,255,136,0.1) 0%, rgba(10,14,23,1) 100%)", border: "1px solid var(--accent)", textAlign: "center" }}>
-          <h2 style={{ fontSize: "1.2rem", color: "var(--accent)", marginBottom: "1rem" }}>Haftan�n Ma� Sonucu</h2>
+          <h2 style={{ fontSize: "1.2rem", color: "var(--accent)", marginBottom: "1rem" }}>Haftanın Maç Sonucu</h2>
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "2rem", fontSize: "2rem", fontFamily: "Orbitron, sans-serif" }}>
             <div style={{ flex: 1, textAlign: "right" }}>{getClubName(matchResult.homeClubId)}</div>
             <div style={{ padding: "0.5rem 1rem", background: "var(--bg-primary)", borderRadius: "8px" }}>
@@ -455,13 +458,13 @@ export const SeasonDashboard = () => {
           {/* Standings */}
           <div className="cc-card" style={{ padding: "1.5rem", marginTop: "1.5rem" }}>
             <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span>??</span> Lig Tablosu
+              <span>🏆</span> Lig Tablosu
             </h3>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-secondary)", textAlign: "left" }}>
-                  <th style={{ padding: "0.5rem" }}>S�ra</th>
-                  <th style={{ padding: "0.5rem" }}>Tak�m</th>
+                  <th style={{ padding: "0.5rem" }}>Sıra</th>
+                  <th style={{ padding: "0.5rem" }}>Takım</th>
                   <th style={{ padding: "0.5rem" }}>O</th>
                   <th style={{ padding: "0.5rem" }}>G</th>
                   <th style={{ padding: "0.5rem" }}>B</th>
@@ -487,6 +490,67 @@ export const SeasonDashboard = () => {
             </table>
           </div>
 
+          {/* Maç Geçmişi */}
+          <div className="cc-card" style={{ padding: "1.5rem", marginTop: "1.5rem" }}>
+            <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span>📜</span> Maç Geçmişi
+            </h3>
+            {(() => {
+              const myMatches = fixture
+                .filter(m => m.isPlayed && (m.homeClubId === clubId || m.awayClubId === clubId))
+                .sort((a, b) => b.week - a.week);
+              if (myMatches.length === 0) {
+                return <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', padding: '0.5rem 0' }}>Henüz oynanmış maçınız yok.</p>;
+              }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {myMatches.map(m => {
+                    const isHome = m.homeClubId === clubId;
+                    const myScore = isHome ? m.homeScore : m.awayScore;
+                    const oppScore = isHome ? m.awayScore : m.homeScore;
+                    const oppId = isHome ? m.awayClubId : m.homeClubId;
+                    const outcome = myScore > oppScore ? 'G' : myScore < oppScore ? 'M' : 'B';
+                    const outcomeColor = outcome === 'G' ? 'var(--accent)' : outcome === 'M' ? '#ff4a4a' : 'var(--text-secondary)';
+                    return (
+                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem', padding: '0.4rem 0' }}>
+                        <span style={{ color: 'var(--text-secondary)', minWidth: '54px' }}>Hafta {m.week}</span>
+                        <span style={{ flex: 1 }}>{isHome ? 'vs' : '@'} {getClubName(oppId)}</span>
+                        <span style={{ fontFamily: 'Orbitron, sans-serif' }}>{myScore} - {oppScore}</span>
+                        <span style={{ color: outcomeColor, fontWeight: 700, minWidth: '14px', textAlign: 'center' }}>{outcome}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Fikstür */}
+          <div className="cc-card" style={{ padding: "1.5rem", marginTop: "1.5rem" }}>
+            <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span>📅</span> Fikstür
+            </h3>
+            {(() => {
+              const upcoming = fixture.filter(m => !m.isPlayed).sort((a, b) => a.week - b.week).slice(0, 10);
+              if (upcoming.length === 0) {
+                return <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', padding: '0.5rem 0' }}>Kalan maç yok.</p>;
+              }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '220px', overflowY: 'auto' }}>
+                  {upcoming.map(m => (
+                    <div key={m.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem', padding: '0.35rem 0',
+                      background: (m.homeClubId === clubId || m.awayClubId === clubId) ? 'rgba(57,255,136,0.05)' : 'transparent'
+                    }}>
+                      <span style={{ color: 'var(--text-secondary)', minWidth: '54px' }}>Hafta {m.week}</span>
+                      <span style={{ flex: 1 }}>{getClubName(m.homeClubId)} <span style={{ color: 'var(--text-secondary)' }}>vs</span> {getClubName(m.awayClubId)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Ready Button */}
           <div className="cc-card" style={{ padding: "1.5rem", marginTop: "1.5rem", textAlign: "center" }}>
             <button 
@@ -495,7 +559,7 @@ export const SeasonDashboard = () => {
               disabled={isReady}
               onClick={handleReadyClick}
             >
-              {isReady ? "Bekleniyor..." : "Ma�a ��k / Haz�r�m"}
+              {isReady ? "Bekleniyor..." : "Maça Çık / Hazırım"}
             </button>
           </div>
 

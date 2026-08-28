@@ -38,6 +38,16 @@ export interface TeamStanding {
   points: number;
 }
 
+export interface FixtureMatch {
+  id: string;
+  week: number;
+  homeClubId: string;
+  awayClubId: string;
+  homeScore: number;
+  awayScore: number;
+  isPlayed: boolean;
+}
+
 export const seasonApi = {
   getClub: async (clubId: string): Promise<ClubDetails> => {
     const res = await axios.get(`${API_BASE}/clubs/${clubId}`, { withCredentials: true });
@@ -51,6 +61,11 @@ export const seasonApi = {
 
   getStandings: async (roomId: string): Promise<TeamStanding[]> => {
     const res = await axios.get(`${API_BASE}/matches/${roomId}/standings`, { withCredentials: true });
+    return res.data;
+  },
+
+  getFixture: async (roomId: string): Promise<FixtureMatch[]> => {
+    const res = await axios.get(`${API_BASE}/matches/${roomId}/fixture`, { withCredentials: true });
     return res.data;
   },
 
