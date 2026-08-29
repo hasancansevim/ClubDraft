@@ -85,9 +85,9 @@ const PosBadge = ({ pos }: { pos: string }) => (
 // ─── OVERALL COLOR ────────────────────────────────────────────────────────────
 const overallColor = (ov: number) => {
   if (ov >= 85) return '#FFD700';
-  if (ov >= 80) return '#39FF88';
-  if (ov >= 75) return '#4A9EFF';
-  return '#8B93A7';
+  if (ov >= 80) return 'var(--pos-mid)';
+  if (ov >= 75) return 'var(--info)';
+  return 'var(--text-secondary)';
 };
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ const Home = () => {
               placeholder="Örn: TIGER42"
               value={roomCode}
               onChange={e => setRoomCode(e.target.value)}
-              style={{ textAlign: 'center', textTransform: 'uppercase', letterSpacing: '4px', fontFamily: 'Orbitron, sans-serif', fontWeight: '700' }}
+              style={{ textAlign: 'center', textTransform: 'uppercase', letterSpacing: '4px', fontFamily: 'var(--font-display)', fontWeight: '700' }}
               maxLength={6}
               id="input-room-code"
             />
@@ -303,7 +303,7 @@ const Lobby = () => {
           <h2 style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>Lobi</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div className={`cc-signal-dot ${isConnected ? 'connected' : ''}`} />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'Rajdhani, sans-serif', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.5px' }}>
               {isConnected ? 'Gerçek Zamanlı Aktif' : 'Bağlanıyor...'}
             </span>
           </div>
@@ -650,7 +650,7 @@ const Draft = () => {
                 <span className="cc-roster-big" style={{ color: isDraftComplete ? 'var(--accent)' : 'var(--accent)' }}>
                   {rosterCount}
                 </span>
-                <span style={{ color: 'var(--text-muted)', fontFamily: 'Rajdhani, sans-serif', fontWeight: 600 }}>/ {MAX_ROSTER_SIZE}</span>
+                <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-display)', fontWeight: 600 }}>/ {MAX_ROSTER_SIZE}</span>
               </div>
             </div>
           </div>
@@ -661,7 +661,7 @@ const Draft = () => {
                 <span className="cc-roster-big" style={{ color: lineupCount === FORMATION_SLOTS.length ? 'var(--accent)' : 'var(--text-secondary)', fontSize: '1.4rem' }}>
                   {lineupCount}
                 </span>
-                <span style={{ color: 'var(--text-muted)', fontFamily: 'Rajdhani, sans-serif', fontWeight: 600 }}>/ {FORMATION_SLOTS.length}</span>
+                <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-display)', fontWeight: 600 }}>/ {FORMATION_SLOTS.length}</span>
               </div>
             </div>
           </div>
@@ -799,7 +799,7 @@ const Draft = () => {
                   {FORMATION_NAMES.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </span>
-              <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '0.85rem', color: lineupCount === FORMATION_SLOTS.length ? 'var(--accent)' : 'var(--text-secondary)' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', color: lineupCount === FORMATION_SLOTS.length ? 'var(--accent)' : 'var(--text-secondary)' }}>
                 {lineupCount}/{FORMATION_SLOTS.length}
               </span>
             </h3>
@@ -826,7 +826,7 @@ const Draft = () => {
                         className="player-draggable"
                         style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
                       >
-                        <div style={{ fontFamily: 'Orbitron, sans-serif', color: overallColor(player.overall), fontWeight: 900, fontSize: '1rem', lineHeight: 1 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', color: overallColor(player.overall), fontWeight: 900, fontSize: '1rem', lineHeight: 1 }}>
                           {player.overall}
                         </div>
                         <div style={{ fontSize: '0.6rem', fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', width: '90%', textAlign: 'center', marginTop: '2px', color: 'var(--text-primary)' }}>

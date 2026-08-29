@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<number, string> = {
 
 const STATUS_COLOR: Record<number, string> = {
   [OfferStatus.Pending]: 'var(--accent)',
-  [OfferStatus.Accepted]: '#39FF88',
+  [OfferStatus.Accepted]: 'var(--pos-mid)',
   [OfferStatus.Rejected]: '#ff4a4a',
   [OfferStatus.Expired]: 'var(--text-secondary)',
 };
@@ -177,7 +177,7 @@ export const SponsorshipDashboard = () => {
         <div style={{ fontSize: '2.5rem' }}>💰</div>
         <div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Güncel Bütçe</div>
-          <div style={{ fontSize: '1.5rem', fontFamily: 'Orbitron, sans-serif', color: 'var(--accent)' }}>
+          <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
             €{(budget ?? 0).toLocaleString()}
           </div>
         </div>
@@ -198,7 +198,7 @@ export const SponsorshipDashboard = () => {
               <div key={offer.id} style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '1.25rem', background: 'var(--bg-secondary)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
                   <div>
-                    <div style={{ fontSize: '1.4rem', fontFamily: 'Orbitron, sans-serif', color: 'var(--accent)' }}>
+                    <div style={{ fontSize: '1.4rem', fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
                       €{offer.amount.toLocaleString()}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>

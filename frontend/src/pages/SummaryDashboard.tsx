@@ -136,7 +136,7 @@ export const SummaryDashboard = () => {
         }}>
           <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🏆</div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '2px' }}>Şampiyon</div>
-          <div style={{ fontSize: '2rem', fontFamily: 'Orbitron, sans-serif', color: '#FFD700', marginTop: '0.25rem' }}>{champion.clubName}</div>
+          <div style={{ fontSize: '2rem', fontFamily: 'var(--font-display)', color: '#FFD700', marginTop: '0.25rem' }}>{champion.clubName}</div>
           <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
             Başkanlık Skoru: <strong style={{ color: '#FFD700' }}>{champion.presidencyScore.toFixed(1)}</strong>
           </div>
@@ -157,19 +157,19 @@ export const SummaryDashboard = () => {
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 140px', textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lig Puanı × 10</div>
-              <div style={{ fontSize: '1.4rem', fontFamily: 'Orbitron, sans-serif' }}>{me.points * 10}</div>
+              <div style={{ fontSize: '1.4rem', fontFamily: 'var(--font-display)' }}>{me.points * 10}</div>
             </div>
             <div style={{ flex: '1 1 140px', textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>İtibar Skoru</div>
-              <div style={{ fontSize: '1.4rem', fontFamily: 'Orbitron, sans-serif' }}>{me.reputation}</div>
+              <div style={{ fontSize: '1.4rem', fontFamily: 'var(--font-display)' }}>{me.reputation}</div>
             </div>
             <div style={{ flex: '1 1 140px', textAlign: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Bütçe ÷ 50.000</div>
-              <div style={{ fontSize: '1.4rem', fontFamily: 'Orbitron, sans-serif' }}>{(me.budget / 50000).toFixed(1)}</div>
+              <div style={{ fontSize: '1.4rem', fontFamily: 'var(--font-display)' }}>{(me.budget / 50000).toFixed(1)}</div>
             </div>
-            <div style={{ flex: '1 1 140px', textAlign: 'center', padding: '1rem', background: 'rgba(57,255,136,0.08)', border: '1px solid var(--accent)', borderRadius: '8px' }}>
+            <div style={{ flex: '1 1 140px', textAlign: 'center', padding: '1rem', background: 'rgba(var(--accent-rgb),0.08)', border: '1px solid var(--accent)', borderRadius: '8px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--accent)', textTransform: 'uppercase' }}>Toplam</div>
-              <div style={{ fontSize: '1.8rem', fontFamily: 'Orbitron, sans-serif', color: 'var(--accent)', fontWeight: 900 }}>{me.presidencyScore.toFixed(1)}</div>
+              <div style={{ fontSize: '1.8rem', fontFamily: 'var(--font-display)', color: 'var(--accent)', fontWeight: 900 }}>{me.presidencyScore.toFixed(1)}</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '2rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -200,7 +200,7 @@ export const SummaryDashboard = () => {
               {rows.map((r, idx) => (
                 <tr key={r.clubId} style={{
                   borderBottom: '1px solid var(--bg-primary)',
-                  background: r.clubId === clubId ? 'rgba(57,255,136,0.05)' : 'transparent'
+                  background: r.clubId === clubId ? 'rgba(var(--accent-rgb),0.05)' : 'transparent'
                 }}>
                   <td style={{ padding: '0.5rem' }}>{idx === 0 && seasonOver ? '🏆' : idx + 1}</td>
                   <td style={{ padding: '0.5rem', fontWeight: 600 }}>{r.clubName}</td>

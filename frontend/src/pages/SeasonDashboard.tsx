@@ -9,9 +9,9 @@ import { FORMATIONS, FORMATION_NAMES, POSITION_GROUP } from '../constants/format
 // Shared overall color logic
 const overallColor = (ov: number) => {
   if (ov >= 85) return '#FFD700';
-  if (ov >= 80) return '#39FF88';
-  if (ov >= 75) return '#4A9EFF';
-  return '#8B93A7';
+  if (ov >= 80) return 'var(--pos-mid)';
+  if (ov >= 75) return 'var(--info)';
+  return 'var(--text-secondary)';
 };
 
 const PosBadge = ({ pos }: { pos: string }) => (
@@ -307,7 +307,7 @@ export const SeasonDashboard = () => {
                       className="player-draggable"
                       style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'grab' }}
                     >
-                      <div style={{ fontFamily: 'Orbitron, sans-serif', color: overallColor(player.overall), fontWeight: 900, fontSize: '1rem', lineHeight: 1 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', color: overallColor(player.overall), fontWeight: 900, fontSize: '1rem', lineHeight: 1 }}>
                         {player.overall}
                       </div>
                       <div style={{ fontSize: '0.6rem', fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', width: '90%', textAlign: 'center', marginTop: '2px', color: 'var(--text-primary)' }}>
@@ -371,7 +371,7 @@ export const SeasonDashboard = () => {
           <div style={{ fontSize: '2.5rem' }}>💰</div>
           <div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Bütçe</div>
-            <div style={{ fontSize: '1.5rem', fontFamily: 'Orbitron, sans-serif', color: 'var(--accent)' }}>
+            <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
               €{clubDetails.budget.toLocaleString()}
             </div>
           </div>
@@ -381,7 +381,7 @@ export const SeasonDashboard = () => {
           <div style={{ fontSize: '2.5rem' }}>⭐</div>
           <div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>İtibar Skoru</div>
-            <div style={{ fontSize: '1.5rem', fontFamily: 'Orbitron, sans-serif' }}>
+            <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)' }}>
               {reputation}
             </div>
           </div>
@@ -391,7 +391,7 @@ export const SeasonDashboard = () => {
           <div style={{ fontSize: '2.5rem' }}>📅</div>
           <div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Hafta</div>
-            <div style={{ fontSize: '1.5rem', fontFamily: 'Orbitron, sans-serif' }}>
+            <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)' }}>
               {currentWeek} / 14
             </div>
           </div>
@@ -401,7 +401,7 @@ export const SeasonDashboard = () => {
           <div style={{ fontSize: '2.5rem' }}>📈</div>
           <div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Lig Sırası</div>
-            <div style={{ fontSize: '1.5rem', fontFamily: 'Orbitron, sans-serif', color: myPosition === 1 ? '#FFD700' : 'inherit' }}>
+            <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', color: myPosition === 1 ? '#FFD700' : 'inherit' }}>
               {myPosition > 0 ? `${myPosition}.` : '-'}
             </div>
           </div>
@@ -410,9 +410,9 @@ export const SeasonDashboard = () => {
 
 
       {matchResult && (
-        <div className="cc-card" style={{ marginBottom: "1.5rem", padding: "1.5rem", background: "linear-gradient(135deg, rgba(57,255,136,0.1) 0%, rgba(10,14,23,1) 100%)", border: "1px solid var(--accent)", textAlign: "center" }}>
+        <div className="cc-card" style={{ marginBottom: "1.5rem", padding: "1.5rem", background: "linear-gradient(135deg, rgba(var(--accent-rgb),0.1) 0%, rgba(13,40,24,1) 100%)", border: "1px solid var(--accent)", textAlign: "center" }}>
           <h2 style={{ fontSize: "1.2rem", color: "var(--accent)", marginBottom: "1rem" }}>Haftanın Maç Sonucu</h2>
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "2rem", fontSize: "2rem", fontFamily: "Orbitron, sans-serif" }}>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "2rem", fontSize: "2rem", fontFamily: "var(--font-display)" }}>
             <div style={{ flex: 1, textAlign: "right" }}>{getClubName(matchResult.homeClubId)}</div>
             <div style={{ padding: "0.5rem 1rem", background: "var(--bg-primary)", borderRadius: "8px" }}>
               {matchResult.homeScore} - {matchResult.awayScore}
@@ -457,7 +457,7 @@ export const SeasonDashboard = () => {
                       onClick={() => handleDecision(dec.type)}
                     >
                       <span>{alreadyTaken ? 'Karar Alındı' : 'Kararı Uygula'}</span>
-                      <span style={{ fontFamily: 'Orbitron, sans-serif' }}>€{dec.cost.toLocaleString()}</span>
+                      <span style={{ fontFamily: 'var(--font-display)' }}>€{dec.cost.toLocaleString()}</span>
                     </button>
                     
                     {!canAfford && !alreadyTaken && (
@@ -489,7 +489,7 @@ export const SeasonDashboard = () => {
               </thead>
               <tbody>
                 {standings.map((s: any, idx) => (
-                  <tr key={s.clubId} style={{ borderBottom: "1px solid var(--bg-primary)", background: s.clubId === clubId ? "rgba(57,255,136,0.05)" : "transparent" }}>
+                  <tr key={s.clubId} style={{ borderBottom: "1px solid var(--bg-primary)", background: s.clubId === clubId ? "rgba(var(--accent-rgb),0.05)" : "transparent" }}>
                     <td style={{ padding: "0.5rem" }}>{idx + 1}</td>
                     <td style={{ padding: "0.5rem", fontWeight: "600" }}>{s.clubName || getClubName(s.clubId)}</td>
                     <td style={{ padding: "0.5rem" }}>{s.played}</td>
@@ -529,7 +529,7 @@ export const SeasonDashboard = () => {
                       <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem', padding: '0.4rem 0' }}>
                         <span style={{ color: 'var(--text-secondary)', minWidth: '54px' }}>Hafta {m.week}</span>
                         <span style={{ flex: 1 }}>{isHome ? 'vs' : '@'} {getClubName(oppId)}</span>
-                        <span style={{ fontFamily: 'Orbitron, sans-serif' }}>{myScore} - {oppScore}</span>
+                        <span style={{ fontFamily: 'var(--font-display)' }}>{myScore} - {oppScore}</span>
                         <span style={{ color: outcomeColor, fontWeight: 700, minWidth: '14px', textAlign: 'center' }}>{outcome}</span>
                       </div>
                     );
@@ -554,7 +554,7 @@ export const SeasonDashboard = () => {
                   {upcoming.map(m => (
                     <div key={m.id} style={{
                       display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem', padding: '0.35rem 0',
-                      background: (m.homeClubId === clubId || m.awayClubId === clubId) ? 'rgba(57,255,136,0.05)' : 'transparent'
+                      background: (m.homeClubId === clubId || m.awayClubId === clubId) ? 'rgba(var(--accent-rgb),0.05)' : 'transparent'
                     }}>
                       <span style={{ color: 'var(--text-secondary)', minWidth: '54px' }}>Hafta {m.week}</span>
                       <span style={{ flex: 1 }}>{getClubName(m.homeClubId)} <span style={{ color: 'var(--text-secondary)' }}>vs</span> {getClubName(m.awayClubId)}</span>

@@ -396,19 +396,40 @@ tasarlanmadı.
 - **İnşa sırası:** (1) proje iskeleti + routing, (2) API + SignalR entegrasyon
   katmanı (merkezi servis/hook katmanı), (3) sayfa sayfa UI, Lobi'den başlayarak.
 
-### 6.1 Görsel Tasarım Sistemi (Karar Verildi)
+### 6.1 Görsel Tasarım Sistemi — "Taktik Tahtası" (2026-08-29'da yenilendi)
 
-**Stil yönü:** Modern spor dashboard'u (FIFA Ultimate Team / Football Manager esintili), kart-temelli arayüz.
+**Stil yönü:** İlk sürüm (koyu lacivert/siyah zemin + elektrik yeşil neon,
+Orbitron/Rajdhani) "AI'ların hep aynı şeyi yaptığı" klişesine düştüğü için
+bilinçli olarak terk edildi. Yerine, oyunun asıl mekaniğinden (formasyon/
+dizilim) ilham alan, kart-temelli "taktik tahtası" teması geldi.
 
-- **Zemin:** Çok koyu lacivert/siyah (`#0A0E17` civarı)
-- **Kart yüzeyi:** Bir ton açık (`#131826` civarı), ince border, yumuşak köşe (12-16px)
-- **Vurgu rengi:** Elektrik yeşil (`#39FF88` civarı) — pozitif aksiyon/aktif durum; kritik/uyarı için ayrı bir turuncu/kırmızı ton
-- **Metin:** Kırık beyaz ana metin, gri-mavi ikincil metin
-- **Tipografi:** Başlıklarda sportif/dar bir font (Rajdhani/Orbitron/Barlow Condensed ailesi), gövdede Inter
-- **Oyuncu/kulüp kartları:** Overall değeri büyük ve belirgin, mevki rozetleri renk kodlu (GK/DEF/MID/FWD), hover'da hafif yükselme/glow
-- **Butonlar:** Dolgun, vurgu renginde, hafif glow efekti
+- **Zemin:** Derin çim yeşili (`#0D2818` civarı, tam siyah değil), `body`
+  üzerinde düşük opaklıklı bir saha-ızgarası SVG dokusu
+- **Kart yüzeyi:** Bir ton açık yeşil basamaklar (`#123D26` / `#1F5233`),
+  kenarlarında tebeşir-çizgisi hissi veren görünür border
+  (`rgba(var(--accent-rgb), 0.14)`), sağ üst köşede saha üzerindeki
+  pozisyon diskini çağrıştıran küçük dairesel bir işaret
+- **Vurgu rengi:** Tebeşir beyazı/krem (`#F5F0E8` civarı) — eski elektrik
+  yeşilinin yerini aldı; opaklık varyantları için `--accent-rgb` (ham
+  "R, G, B" custom property) tanımlı, hem CSS hem satır-içi React
+  stillerinde `rgba(var(--accent-rgb), X)` ile kullanılıyor — tek bir
+  değişiklik hem `index.css` hem tüm sayfalara yayılıyor
+- **Metin:** Kırık beyaz ana metin, yeşile doğru ısıtılmış gri ikincil metin
+- **Tipografi:** Başlıklarda Oswald (`--font-display`, Google Fonts),
+  gövdede Inter
+- **Dekoratif doku:** Ana Sayfa arka planında düşük opaklıklı formasyon
+  oku/nokta deseni (SVG, saha üzerindeki oyuncu dizilimini çağrıştırıyor)
+- **Oyuncu/kulüp kartları:** Overall değeri büyük ve belirgin, mevki
+  rozetleri renk kodlu (GK/DEF/MID/FWD — MID artık kendi yeşil tonunda,
+  `--accent`'ten bağımsız), hover'da hafif yükselme/glow
+- **Butonlar:** Dolgun, vurgu renginde (krem), hafif glow efekti
+- **Saha görünümü (`.pitch-container`):** Sayfa zemini de yeşile kaydığı
+  için sahanın kendisi bilinçli olarak daha canlı/doygun bir tonda —
+  chrome'dan ayrışıp gerçekten "saha" gibi okunması için
 
-Bu tasarım sistemi, ilk olarak global bir tema (CSS variables/design tokens) olarak kurulup, mevcut placeholder sayfalara uygulanacak.
+Kulüp/forma rengi sistemi (her kullanıcının kendi renk paletini seçmesi)
+bilinçli olarak bu turun kapsamı dışında bırakıldı — ayrı bir iş olarak ele
+alınacak.
 
 ### 6.2 Frontend İlerleme Durumu (güncel)
 
