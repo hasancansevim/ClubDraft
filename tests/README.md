@@ -2,8 +2,8 @@
 
 Manuel E2E doğrulama script'leri ve araçları. Bunlar bir test runner'ı
 altında otomatik çalışmaz — ilgili servisleri ayakta bulup elle
-çalıştırılmak üzere yazılmışlardır. `spec.md`'deki E2E doğrulama
-notlarının dayandığı script'ler burada.
+çalıştırılmak üzere yazılmışlardır. `docs/ClubCraft-Spec.md`'deki E2E
+doğrulama notlarının dayandığı script'ler burada.
 
 ## Çalışan / güncel
 
@@ -18,7 +18,7 @@ notlarının dayandığı script'ler burada.
   event'leri (roster ekleme, haftalık karar, maç sonucu) tetikleyip
   itibar skorunun beklendiği gibi değiştiğini doğrular.
 - **run_e2e_test_powerrating.ps1** — Match Engine güç formülü derinleştirmesi
-  (bkz. spec.md, "Match Engine güç formülü derinleştirme") için gerçek E2E
+  (bkz. docs/ClubCraft-Spec.md, "Match Engine güç formülü derinleştirme") için gerçek E2E
   kanıt: iki kulüp draft edilir, aynı kadroyla doğru vs bilerek bozuk
   (kaleci forvette) dizilim 14'er maçlık iki seride karşılaştırılır (DB'den
   puan/galibiyet farkı doğrulanır), ayrı bir seride Moral'in DB'de +5'e
@@ -30,20 +30,9 @@ notlarının dayandığı script'ler burada.
   (+ SagaOrchestrator). `start_services.ps1` bunu servisleri başlatmadan
   **önce** senkron olarak çağırır — eksik migration'ların sessizce
   atlanıp servislerin bozuk şemayla ayağa kalkmasını engellemek için
-  (bkz. spec.md, 2026-08-28 notu).
+  (bkz. docs/ClubCraft-Spec.md, 2026-08-28 notu).
 - **realtime-test.html** — RealtimeHub'a doğrudan SignalR bağlantısı
   kurup event akışını izlemek için tarayıcıda açılan bağımsız bir
   panel (CDN'den signalr.min.js çeker, build gerektirmez).
 - **RealtimeHub.TestClient/** — RealtimeHub için ayrı bir .NET konsol
   test istemcisi.
-
-## Bilinen bozuk / güncel değil (silinmedi, olduğu gibi taşındı)
-
-- **regression_test.ps1** — Artık var olmayan eski endpoint şekillerine
-  işaret ediyor (`/api/draft/rooms`, `/api/clubmanagement/clubs`,
-  `/api/matchengine/simulate`). Güncel API `/api/sessions`,
-  `/api/draft-sessions`, `/api/clubs`, `/api/matches/{roomId}/...`
-  şeklinde. **Çalıştırılmadan önce güncellenmesi gerekir.**
-- **test_run.ps1** — Dosya bozuk bir encoding'le (UTF-16 karışması)
-  kaydedilmiş, ayrıca eski/yanlış bir port (5006) kullanıyor.
-  **Şu haliyle çalışmaz**, gerekirse sıfırdan yeniden yazılmalı.

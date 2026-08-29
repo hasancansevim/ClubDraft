@@ -1,72 +1,99 @@
 # ClubCraft
 
-Arkadaş gruplarının futbol kulübü başkanlığı yaptığı, sezonluk draft tabanlı multiplayer web oyunu.
-Microservices mimarisi ile geliştirilen bir CV/portfolyo projesidir.
+Arkadaş gruplarının (4-6 kişi) her birinin bir futbol kulübünün başkanı
+olduğu, sezonluk ve draft tabanlı bir multiplayer web oyunu. Asıl amaç bir
+"oyun" üretmek değil, **gerçekçi ölçekte bir mimari CV projesi** ortaya
+koymak: concurrency yönetimi, event-driven iletişim, saga pattern, gerçek
+zamanlı senkronizasyon.
 
-Detaylı gereksinim ve mimari dokümanı için: [`docs/ClubCraft-Spec.md`](docs/ClubCraft-Spec.md)
+Tüm gereksinim analizi, mimari kararlar, aggregate/domain event tasarımı,
+API contract taslakları ve geliştirme sürecinde bulunup çözülen mimari
+sorunların kronolojik kaydı için: **[`docs/ClubCraft-Spec.md`](docs/ClubCraft-Spec.md)**.
+
+## Oyun Döngüsü (özet)
+
+Oda kur → kulüp seç → sıralı draft (snake, gerçek zamanlı) → 10-14 haftalık
+sezon (her hafta: maç simülasyonu + haftalık iş kararları + sponsorluk) →
+sezon sonu Başkanlık Skoru. Detaylar için spec §2-§3.
+
+## Mimari
+
+| Servis | Stil | Sorumluluk | Kritik Nokta |
+|---|---|---|---|
+| **Session** | Clean Architecture | Oda kurma, kulüp seçimi, ready-check | Senkron "herkes hazır" orkestrasyonu |
+| **Draft** | Clean Architecture | Draft sırası, oyuncu havuzu | Redis distributed lock, optimistic concurrency |
+| **ClubManagement** | Clean Architecture | Kulüp, kadro, bütçe, haftalık kararlar | Draft ile Saga ilişkisi |
+| **MatchEngine** | Vertical Slice | Fikstür üretimi, maç simülasyonu, güç formülü | Bilinçli olarak basit tutulan taktik motoru |
+| **ReputationFan** | Event-driven | İtibar/taraftar skoru | Event tüketici |
+| **FinanceSponsorship** | N-Layered | Bütçe hareketleri, sponsorluk teklifleri | Event tetikli iş akışı |
+| **SagaOrchestrator** | Worker Service | Draft ↔ ClubManagement pick koordinasyonu | MassTransit State Machine |
+| **RealtimeHub** | SignalR | Draft + hafta ilerleme yayını | Redis backplane |
+| **ApiGateway** | YARP | Frontend'in tek giriş noktası | WebSocket upgrade proxy'leme |
+
+Servisler arası iletişim RabbitMQ + MassTransit (Outbox/Inbox pattern ile
+at-least-once teslimat + idempotency); her serviste ayrı bir PostgreSQL
+instance'ı (database-per-service).
+
+## Teknoloji Yığını
+
+.NET (C#), PostgreSQL, RabbitMQ + MassTransit, Redis, SignalR, YARP,
+EF Core, FluentValidation, Mapster, Docker Compose — backend.
+React + TypeScript + Vite — frontend.
+
+## Durum
+
+Backend'in 8 servisi + API Gateway + RealtimeHub, gerçek Docker
+altyapısında uçtan uca doğrulandı (Draft→ClubManagement Saga, tam event
+zinciri, SignalR üzerinden gerçek zamanlı akış, hepsi API Gateway
+üzerinden WebSocket upgrade dahil). Frontend'de tüm akış çalışıyor: Ana
+Sayfa → Lobi → Draft → Sezon Dashboard'u (fikstür/kadro/formasyon/bütçe/
+haftalık kararlar) → Sponsorluk → Sezon Sonu. Devam eden çalışma ve
+bulunan/çözülen tüm hatalar için `docs/ClubCraft-Spec.md`'deki kronolojik
+notlara bakın.
 
 ## Klasör Yapısı
 
 ```
 ClubCraft/
-├── docs/                        # Spec, mimari kararlar, ADR'ler
-├── docker/                      # docker-compose ve servis bazlı Dockerfile'lar
+├── docs/                        # Spec ve mimari karar günlüğü
+├── docker/                      # docker-compose (Postgres x7, RabbitMQ, Redis)
+├── frontend/                    # React + TS + Vite
+├── tests/                       # Manuel E2E doğrulama script'leri (bkz. tests/README.md)
 ├── src/
 │   ├── ApiGateway/               # YARP tabanlı gateway
 │   ├── BuildingBlocks/
-│   │   ├── Common/                # Ortak kernel (base entity, result pattern vb.)
-│   │   ├── Contracts/             # Servisler arası paylaşılan event/mesaj sözleşmeleri
-│   │   └── Messaging/             # MassTransit/RabbitMQ ortak konfigürasyon
+│   │   ├── Common/                # Ortak kernel (base entity, enum'lar vb.)
+│   │   ├── Contracts/             # Servisler arası paylaşılan event sözleşmeleri
+│   │   └── Sagas/                 # MassTransit saga state machine'leri
 │   └── Services/
-│       ├── Session/               # Oda kurma, katılımcı, ready-check (Clean Architecture)
-│       ├── Draft/                 # Draft sırası, oyuncu havuzu (Clean Architecture)
-│       ├── ClubManagement/        # Kulüp, kadro, bütçe, iş kararları (Clean Architecture)
-│       ├── MatchEngine/           # Fikstür ve maç simülasyonu (Vertical Slice)
-│       ├── ReputationFan/         # İtibar/taraftar skoru (Event-driven, hafif)
-│       ├── FinanceSponsorship/    # Bütçe hareketleri, sponsorluk (N-Layered)
-│       └── RealtimeHub/           # SignalR hub (draft + hafta ilerleme yayını)
+│       ├── Session/               # Oda kurma, katılımcı, ready-check
+│       ├── Draft/                 # Draft sırası, oyuncu havuzu
+│       ├── ClubManagement/        # Kulüp, kadro, bütçe, iş kararları
+│       ├── MatchEngine/           # Fikstür, maç simülasyonu, güç formülü
+│       ├── ReputationFan/         # İtibar/taraftar skoru
+│       ├── FinanceSponsorship/    # Bütçe hareketleri, sponsorluk
+│       ├── RealtimeHub/           # SignalR hub
+│       └── SagaOrchestrator/      # Draft↔ClubManagement saga
 ```
 
-Her servis klasörü altında (RealtimeHub hariç) 4 katman placeholder'ı var:
-`Domain / Application / Infrastructure / API`
+Her servis (RealtimeHub ve SagaOrchestrator hariç) 4 katmanlı:
+`Domain / Application / Infrastructure / API`.
 
-## Kurulum (Kendi Makinende)
+## Kendi Makinende Çalıştırma
 
-Bu iskelet sadece klasör yapısını içerir; gerçek .NET proje dosyaları (.sln, .csproj)
-henüz oluşturulmadı çünkü bu ortamda .NET SDK yok. Kendi makinende aşağıdaki adımları
-izleyerek gerçek projeleri oluşturabilirsin:
+```powershell
+# 1) Altyapı (7x PostgreSQL, RabbitMQ, Redis)
+cd docker
+docker compose up -d
+cd ..
 
-```bash
-# 1) Solution oluştur
-dotnet new sln -n ClubCraft
-
-# 2) Her servis için katman projelerini oluştur (örnek: Draft servisi)
-cd src/Services/Draft
-dotnet new classlib -n ClubCraft.Draft.Domain -o Domain
-dotnet new classlib -n ClubCraft.Draft.Application -o Application
-dotnet new classlib -n ClubCraft.Draft.Infrastructure -o Infrastructure
-dotnet new webapi -n ClubCraft.Draft.API -o API
-cd ../../..
-
-# 3) Projeleri solution'a ekle
-dotnet sln add src/Services/Draft/Domain/ClubCraft.Draft.Domain.csproj
-dotnet sln add src/Services/Draft/Application/ClubCraft.Draft.Application.csproj
-dotnet sln add src/Services/Draft/Infrastructure/ClubCraft.Draft.Infrastructure.csproj
-dotnet sln add src/Services/Draft/API/ClubCraft.Draft.API.csproj
-
-# ... aynı pattern diğer servisler için tekrarlanır (Session, ClubManagement,
-#     MatchEngine, ReputationFan, FinanceSponsorship)
-
-# 4) ApiGateway ve RealtimeHub için
-cd src/ApiGateway && dotnet new web -n ClubCraft.ApiGateway && cd ../..
-cd src/Services/RealtimeHub && dotnet new web -n ClubCraft.RealtimeHub && cd ../../..
+# 2) Tüm backend servisleri (migration kontrolü dahil) + frontend
+.\start_services.ps1
 ```
 
-> Not: `setup.sh` script'i bu adımların tamamını otomatik çalıştırır — bkz. aşağı.
+`start_services.ps1`, servisleri başlatmadan önce `tests/run_migrations.ps1`'i
+senkron çalıştırır (eksik migration'ların sessizce atlanıp servislerin
+bozuk şemayla ayağa kalkmasını önlemek için), ardından 9 backend servisini
+ve frontend'i (`npm run dev`) arka planda başlatır. Loglar `logs/` altında.
 
-## Teknoloji Yığını
-
-.NET 8, PostgreSQL (database-per-service), RabbitMQ + MassTransit, Redis,
-SignalR, YARP, EF Core, FluentValidation, Mapster, Docker Compose.
-
-Detaylar için bkz. [`docs/ClubCraft-Spec.md`](docs/ClubCraft-Spec.md) §5.
+Frontend'i tek başına çalıştırmak için: `cd frontend && npm install && npm run dev`.
