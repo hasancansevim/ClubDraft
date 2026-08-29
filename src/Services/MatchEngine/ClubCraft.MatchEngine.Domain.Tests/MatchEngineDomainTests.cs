@@ -19,13 +19,19 @@ public class MatchEngineDomainTests
     {
         var generator = new RoundRobinFixtureGenerator();
         var clubIds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() }; // 5 teams
-        
+
         var fixture = generator.GenerateFixture(Guid.NewGuid(), clubIds);
 
         _output.WriteLine("--- 5 Teams Fixture ---");
-        int totalExpectedMatches = (5 * 4) / 2; // Every team plays 4 matches
-        
-        // Let's verify every team plays everyone exactly once
+
+        // Jenerator artik TEK bir devre (teams.Count - 1 hafta) uretmiyor -- 2026-08-28'de
+        // "Bug A" duzeltmesiyle (bkz. spec.md) SeasonLengthWeeks'e (14) kadar bu devreyi
+        // tekrarliyor, cunku kucuk ligler (2-6 takim) tek devreyle 10-14 haftalik sezona hic
+        // ulasamiyordu. 5 takim + 1 "bye" slotuyla (Guid.Empty) 6'ya tamamlaniyor, her hafta
+        // 3 eslesmeden biri hep bye oldugu icin gercekte 2 mac/hafta yayinlaniyor.
+        int matchesPerWeek = ((clubIds.Count + 1) / 2) - 1; // bye ciftini cikar
+        int totalExpectedMatches = RoundRobinFixtureGenerator.SeasonLengthWeeks * matchesPerWeek;
+
         var matchCounts = new Dictionary<Guid, int>();
         foreach (var id in clubIds) matchCounts[id] = 0;
 
@@ -37,11 +43,17 @@ public class MatchEngineDomainTests
         }
 
         Assert.Equal(totalExpectedMatches, fixture.Matches.Count);
-        
-        // Every team should have played exactly 4 times (since there are 5 teams)
+
+        // 14 hafta, 5 haftalik devre uzunluguna (teams.Count) tam bolunmuyor (14 = 2 tam
+        // devre + 4 fazla hafta) -- bu yuzden takimlar artik eskisi gibi BIREBIR esit sayida
+        // mac oynamiyor: her takim ya 2 tam devrenin verdigi 8 macin +3'unu (kendi bye haftasi
+        // fazla 4 haftanin icine denk gelen takimlar) ya da +4'unu (bye haftasi fazla 4
+        // haftanin disinda kalan tek takim) alir. Toplam mac sayisi ve takim basina dusen
+        // maclarin toplami yine de kesin ve dogrulanabilir.
+        Assert.Equal(2 * totalExpectedMatches, matchCounts.Values.Sum());
         foreach (var count in matchCounts.Values)
         {
-            Assert.Equal(4, count);
+            Assert.InRange(count, 11, 12);
         }
     }
 
