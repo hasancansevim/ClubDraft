@@ -4,5 +4,5 @@ namespace ClubCraft.MatchEngine.Domain.Services;
 
 public interface IMatchSimulator
 {
-    void Simulate(Match match, int homePower, int awayPower);
+    void Simulate(Match match, double homePower, double awayPower);
 }

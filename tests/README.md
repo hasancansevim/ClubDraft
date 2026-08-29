@@ -17,6 +17,14 @@ notlarının dayandığı script'ler burada.
 - **run_e2e_test_reputationfan.ps1** — ReputationFan'in dinlediği
   event'leri (roster ekleme, haftalık karar, maç sonucu) tetikleyip
   itibar skorunun beklendiği gibi değiştiğini doğrular.
+- **run_e2e_test_powerrating.ps1** — Match Engine güç formülü derinleştirmesi
+  (bkz. spec.md, "Match Engine güç formülü derinleştirme") için gerçek E2E
+  kanıt: iki kulüp draft edilir, aynı kadroyla doğru vs bilerek bozuk
+  (kaleci forvette) dizilim 14'er maçlık iki seride karşılaştırılır (DB'den
+  puan/galibiyet farkı doğrulanır), ayrı bir seride Moral'in DB'de +5'e
+  ulaşıp kilitlendiği gösterilir. `docker exec ... psql` ile SQL çalıştırmak
+  için stdin üzerinden geçiriyor (`Invoke-Psql` — argv üzerinden çift
+  tırnaklı tanımlayıcı geçirmek Windows'ta güvenilir kaçmıyor).
 - **run_migrations.ps1** — `src/Services/**/*.API.csproj` altındaki her
   servis için otomatik olarak `dotnet ef database update` çalıştırır
   (+ SagaOrchestrator). `start_services.ps1` bunu servisleri başlatmadan

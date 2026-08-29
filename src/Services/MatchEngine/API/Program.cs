@@ -16,6 +16,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // Domain Services
 builder.Services.AddTransient<IFixtureGenerator, RoundRobinFixtureGenerator>();
 builder.Services.AddTransient<IMatchSimulator, MatchSimulator>();
+builder.Services.AddTransient<IClubPowerCalculator, ClubPowerCalculator>();
 
 // MassTransit
 builder.Services.AddMassTransit(x =>
@@ -31,6 +32,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<PlayerAddedToRosterCommandConsumer>();
     x.AddConsumer<PlayerRemovedFromRosterCommandConsumer>();
     x.AddConsumer<WeeklyDecisionMadeEventConsumer>();
+    x.AddConsumer<LineupUpdatedEventConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -48,6 +50,7 @@ builder.Services.AddMassTransit(x =>
             e.ConfigureConsumer<PlayerAddedToRosterCommandConsumer>(context);
             e.ConfigureConsumer<PlayerRemovedFromRosterCommandConsumer>(context);
             e.ConfigureConsumer<WeeklyDecisionMadeEventConsumer>(context);
+            e.ConfigureConsumer<LineupUpdatedEventConsumer>(context);
         });
     });
 });

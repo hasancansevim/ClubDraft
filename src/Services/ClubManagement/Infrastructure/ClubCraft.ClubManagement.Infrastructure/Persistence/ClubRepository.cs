@@ -73,6 +73,7 @@ public class ClubRepository : IClubRepository
                     RoomId = e.RoomId,
                     PlayerId = e.PlayerId,
                     Overall = e.Overall,
+                    Position = e.Position,
                     PickAttemptId = e.PickAttemptId
                 }, cancellationToken);
                 break;
@@ -99,6 +100,15 @@ public class ClubRepository : IClubRepository
                     Week = e.Week,
                     Type = (int)e.Type,
                     Cost = e.Cost
+                }, cancellationToken);
+                break;
+            case LineupUpdatedEvent e:
+                await _publishEndpoint.Publish<ILineupUpdatedEvent>(new
+                {
+                    ClubId = e.ClubId,
+                    RoomId = e.RoomId,
+                    Formation = e.Formation,
+                    Slots = e.Slots
                 }, cancellationToken);
                 break;
         }

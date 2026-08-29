@@ -50,9 +50,28 @@ public class MatchEngineDbContext : DbContext
         {
             b.HasKey(c => c.ClubId); // ClubId is PK
             b.Property(c => c.RoomId).IsRequired();
-            b.Property(c => c.TotalOverall).IsRequired();
+            b.Property(c => c.Formation).IsRequired();
             b.Property(c => c.MoraleBonus).IsRequired();
-            b.Ignore(c => c.ComputedPower);
+            b.Property(c => c.Moral).IsRequired();
+
+            b.OwnsMany(c => c.Roster, r =>
+            {
+                r.WithOwner().HasForeignKey("ClubPowerRatingClubId");
+                r.Property<int>("Id");
+                r.HasKey("Id");
+                r.Property(p => p.PlayerId).IsRequired();
+                r.Property(p => p.Overall).IsRequired();
+                r.Property(p => p.Position).HasConversion<string>().IsRequired();
+            });
+
+            b.OwnsMany(c => c.LineupSlots, s =>
+            {
+                s.WithOwner().HasForeignKey("ClubPowerRatingClubId");
+                s.Property<int>("Id");
+                s.HasKey("Id");
+                s.Property(sl => sl.SlotId).IsRequired();
+                s.Property(sl => sl.PlayerId);
+            });
         });
     }
 }

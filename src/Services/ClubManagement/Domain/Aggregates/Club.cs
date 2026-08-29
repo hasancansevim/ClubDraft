@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ClubCraft.BuildingBlocks.Common.SeedWork;
 using ClubCraft.BuildingBlocks.Common.Enums;
 using ClubCraft.ClubManagement.Domain.Entities;
@@ -44,9 +45,9 @@ public class Club : AggregateRoot<Guid>
     {
         if (_roster.Any(p => p.Id == playerId))
         {
-            // Idempotency: if player is already added, emit success event again silently 
+            // Idempotency: if player is already added, emit success event again silently
             // so the Saga doesn't get stuck or trigger a false compensating action.
-            AddDomainEvent(new PlayerAddedToRosterEvent(Id, RoomId, playerId, overall, pickAttemptId));
+            AddDomainEvent(new PlayerAddedToRosterEvent(Id, RoomId, playerId, overall, position, pickAttemptId));
             return;
         }
 
@@ -59,7 +60,7 @@ public class Club : AggregateRoot<Guid>
         var player = new Player(playerId, name, position, overall, age, marketValue);
         _roster.Add(player);
 
-        AddDomainEvent(new PlayerAddedToRosterEvent(Id, RoomId, playerId, overall, pickAttemptId));
+        AddDomainEvent(new PlayerAddedToRosterEvent(Id, RoomId, playerId, overall, position, pickAttemptId));
     }
 
     public void RemovePlayerFromRoster(Guid playerId)
@@ -113,6 +114,7 @@ public class Club : AggregateRoot<Guid>
     public void UpdateLineup(string lineupJson)
     {
         LineupJson = lineupJson;
+        AddDomainEvent(new LineupUpdatedEvent(Id, RoomId, Formation, ParseLineupSlots(LineupJson)));
     }
 
     public void UpdateFormation(string formation)
@@ -129,6 +131,28 @@ public class Club : AggregateRoot<Guid>
         // "CM1"i yeni formasyonda yok) artik anlamli olmayabilir — lineup'i
         // temizliyoruz, kullanici yeni formasyona oyuncularini yeniden diziyor.
         LineupJson = "{}";
+        // Bos slot dict'i ile de event atiyoruz — aksi halde MatchEngine'deki
+        // dizilim cache'i eski formasyonun (artik anlamsiz) slot atamalarinda
+        // bayat kalirdi.
+        AddDomainEvent(new LineupUpdatedEvent(Id, RoomId, Formation, ParseLineupSlots(LineupJson)));
+    }
+
+    private static Dictionary<string, Guid?> ParseLineupSlots(string lineupJson)
+    {
+        // LineupJson frontend'den { slotId: playerId | null } seklinde gelir
+        // (bkz. SeasonDashboard.tsx). Bozuk/bos deger domain event akisini
+        // durdurmasin diye burada sessizce bos sozluge dusuluyor.
+        try
+        {
+            var raw = JsonSerializer.Deserialize<Dictionary<string, string?>>(lineupJson) ?? new();
+            return raw.ToDictionary(
+                kv => kv.Key,
+                kv => Guid.TryParse(kv.Value, out var playerId) ? (Guid?)playerId : null);
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<string, Guid?>();
+        }
     }
 
     private static decimal GetDecisionCost(WeeklyDecisionType type)

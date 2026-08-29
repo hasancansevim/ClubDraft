@@ -1,4 +1,5 @@
 using ClubCraft.MatchEngine.Application.Repositories;
+using ClubCraft.MatchEngine.Domain.Enums;
 using ClubCraft.MatchEngine.Domain.Services;
 using MediatR;
 using MassTransit;
@@ -11,14 +12,16 @@ public class SimulateMatchesForWeekCommandHandler : IRequestHandler<SimulateMatc
     private readonly IFixtureRepository _fixtureRepository;
     private readonly IClubPowerRatingRepository _powerRepository;
     private readonly IMatchSimulator _matchSimulator;
+    private readonly IClubPowerCalculator _powerCalculator;
     private readonly IPublishEndpoint _publishEndpoint;
     private readonly ILogger<SimulateMatchesForWeekCommandHandler> _logger;
 
-    public SimulateMatchesForWeekCommandHandler(IFixtureRepository fixtureRepository, IClubPowerRatingRepository powerRepository, IMatchSimulator matchSimulator, IPublishEndpoint publishEndpoint, ILogger<SimulateMatchesForWeekCommandHandler> logger)
+    public SimulateMatchesForWeekCommandHandler(IFixtureRepository fixtureRepository, IClubPowerRatingRepository powerRepository, IMatchSimulator matchSimulator, IClubPowerCalculator powerCalculator, IPublishEndpoint publishEndpoint, ILogger<SimulateMatchesForWeekCommandHandler> logger)
     {
         _fixtureRepository = fixtureRepository;
         _powerRepository = powerRepository;
         _matchSimulator = matchSimulator;
+        _powerCalculator = powerCalculator;
         _publishEndpoint = publishEndpoint;
         _logger = logger;
     }
@@ -52,9 +55,17 @@ public class SimulateMatchesForWeekCommandHandler : IRequestHandler<SimulateMatc
                 throw new Exception($"Missing power rating for clubs {match.HomeClubId} or {match.AwayClubId}");
             }
 
-            _matchSimulator.Simulate(match, homePower.ComputedPower, awayPower.ComputedPower);
+            var homeTeamPower = _powerCalculator.Calculate(homePower).TeamPower;
+            var awayTeamPower = _powerCalculator.Calculate(awayPower).TeamPower;
 
-            // Reset Morale Bonus after playing
+            _matchSimulator.Simulate(match, homeTeamPower, awayTeamPower);
+
+            // Mac sonucuna gore Moral'i guncelle (surekli, [-5,+5] sinirli — MoraleBonus'tan ayri)
+            var (homeOutcome, awayOutcome) = ResolveOutcomes(match.HomeScore, match.AwayScore);
+            homePower.ApplyMatchResult(homeOutcome);
+            awayPower.ApplyMatchResult(awayOutcome);
+
+            // Reset Morale Bonus after playing (haftalik, tek seferlik bonus — Moral'den ayri)
             homePower.ResetMoraleBonus();
             awayPower.ResetMoraleBonus();
 
@@ -80,5 +91,14 @@ public class SimulateMatchesForWeekCommandHandler : IRequestHandler<SimulateMatc
         }, cancellationToken);
 
         await _fixtureRepository.SaveAsync(fixture, cancellationToken);
+    }
+
+    private static (MatchOutcome Home, MatchOutcome Away) ResolveOutcomes(int homeScore, int awayScore)
+    {
+        if (homeScore > awayScore)
+            return (MatchOutcome.Win, MatchOutcome.Loss);
+        if (homeScore < awayScore)
+            return (MatchOutcome.Loss, MatchOutcome.Win);
+        return (MatchOutcome.Draw, MatchOutcome.Draw);
     }
 }

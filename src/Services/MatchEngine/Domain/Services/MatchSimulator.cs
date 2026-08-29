@@ -18,17 +18,17 @@ public class MatchSimulator : IMatchSimulator
         _random = new Random(seed);
     }
 
-    public void Simulate(Match match, int homePower, int awayPower)
+    public void Simulate(Match match, double homePower, double awayPower)
     {
         // 1. Add Home Advantage (+5% relative to the total)
         // A simple way is to add a small flat bonus to home power
-        homePower += (int)(homePower * 0.05);
+        homePower += homePower * 0.05;
 
         // 2. Calculate Win Probabilities
         double totalPower = homePower + awayPower;
-        
+
         // If both have 0 power for some reason, equal chance
-        if (totalPower == 0)
+        if (totalPower <= 0)
         {
             homePower = 100;
             awayPower = 100;

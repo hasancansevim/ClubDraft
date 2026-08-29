@@ -16,18 +16,16 @@ public class PlayerRemovedFromRosterCommandConsumer : IConsumer<IPlayerRemovedFr
     public async Task Consume(ConsumeContext<IPlayerRemovedFromRosterEvent> context)
     {
         var msg = context.Message;
-        
+
         var power = await _powerRepository.GetByIdAsync(msg.ClubId, context.CancellationToken);
-        if (power != null)
-        {
-            // We need to know the 'Overall' to remove it. But IPlayerRemovedFromRosterEvent doesn't have it!
-            // This is a known issue. In a real app we'd fetch the player's overall or store the roster in MatchEngine.
-            // For now, this is a limitation, we might just reduce by a flat amount or ignore it as Draft only ADDS players currently.
-            
-            // Temporary workaround: since Draft doesn't remove players during season, this is largely unimplemented.
-            // In a full implementation, we should sync the whole Roster to MatchEngine.
-            
-            await _powerRepository.SaveAsync(power, context.CancellationToken);
-        }
+        if (power == null)
+            return;
+
+        // ClubPowerRating artik roster'i per-player snapshot (PlayerId, Overall,
+        // Position) olarak tuttugu icin PlayerId ile dogrudan cikartabiliyoruz —
+        // eskiden burada "Overall'i bilmiyoruz" diye yorumlanan kisitlama artik yok.
+        power.RemovePlayer(msg.PlayerId);
+
+        await _powerRepository.SaveAsync(power, context.CancellationToken);
     }
 }

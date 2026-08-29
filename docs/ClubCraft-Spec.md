@@ -728,6 +728,97 @@ teyit edildi) → draft tamamlandı → Sezon Dashboard'a geçildi → dropdown
 hâlâ "3-5-2" seçili, saha aynı dizilimde, DB'de (`Clubs.Formation`) tek
 ve tutarlı bir değer görüldü.
 
+### Match Engine güç formülü derinleştirme (2026-08-29)
+
+**Teşhis (değiştirmeden önce doğrulandı):** `ClubPowerRating.TotalOverall`
+roster'daki **tüm** oyuncuların (İlk 11 değil, yedekler dahil hepsinin)
+Overall'larının ham toplamıydı; `ComputedPower = TotalOverall + MoraleBonus`.
+Pozisyon, dizilim, yıldız etkisi, kadro derinliği kavramları hiç yoktu.
+**Kopukluk doğrulandı:** `Club.LineupJson`/`Club.Formation` hiçbir zaman bir
+domain event'e dönüşmüyordu (`UpdateLineup`/`UpdateFormation` state'i mutate
+ediyor ama `AddDomainEvent` çağırmıyordu) — MatchEngine'in hangi oyuncunun
+hangi slotta olduğunu bilme imkânı **hiç yoktu**.
+
+**Yapılan değişiklik:**
+- Yeni `ILineupUpdatedEvent` (ClubId, RoomId, Formation, Slots) — Club
+  aggregate'i artık lineup/formasyon her değiştiğinde bunu yayınlıyor;
+  MatchEngine yeni `LineupUpdatedEventConsumer` ile dinleyip kendi
+  `ClubPowerRating`'inde saklıyor.
+- `ClubPowerRating` yeniden tasarlandı: tek bir `TotalOverall` sayacı yerine
+  gerçek bir roster kopyası (`RosterPlayerSnapshot`: PlayerId, Overall,
+  Position) ve lineup kopyası (`LineupSlotAssignment`: SlotId, PlayerId?)
+  tutuyor. Bu, `PlayerRemovedFromRosterCommandConsumer`'daki eski "Overall'i
+  bilmiyoruz" kısıtlamasını da (kod yorumunda "known issue" olarak
+  işaretliydi) kendiliğinden çözdü — artık PlayerId ile doğrudan çıkarılıyor.
+- Yeni `IClubPowerCalculator`/`ClubPowerCalculator` (MatchEngine.Domain):
+  `FormationCatalog` (4 formasyonun slot→gerekli-pozisyon eşlemesi,
+  `frontend/src/constants/formations.ts` ile elle senkron) ve
+  `PositionCompatibility.Multiplier` (tam eşleşme 1.00, aynı aile 0.85,
+  komşu aile — Defans↔OrtaSaha, OrtaSaha↔Hücum — 0.65, uzak aile —
+  Defans↔Hücum, GK↔herhangi biri — 0.40) kullanarak:
+  `BazGüç = Σ(Overall × Çarpan) / 11` (İlk 11), `YıldızBonusu = 0.15 ×
+  (İlk11'deki EnYüksekOverall − BazGüç)`, `DerinlikBonusu = 0.05 ×
+  (yedeklerin ort. Overall'i)`, `TakımGücü = BazGüç + YıldızBonusu +
+  DerinlikBonusu + MoralModifiye`. Lineup hiç kurulmamışsa/eksikse, boş
+  slotlar roster'dan kalan en iyi oyuncuyla (önce pozisyonu tam uyanla, yoksa
+  en yüksek Overall'liyle) otomatik dolduruluyor — kullanıcı lineup'i hiç
+  ayarlamadıysa bu bir "bozuk dizilim" gibi cezalandırılmıyor. Ev sahibi +%5
+  avantajı (`MatchSimulator`) değişmeden, artık bu yeni `TakımGücü` (double)
+  üzerine uygulanıyor.
+- Yeni `Moral` alanı (`ClubPowerRating`, `[-5,+5]` sınırlı, mac sonrası
+  `ApplyMatchResult` ile güncelleniyor: Galibiyet +3, Mağlubiyet −3, Beraberlik
+  0'a 1 birim yaklaşır) — haftalık karardan gelen `MoraleBonus` (tek seferlik,
+  maç sonrası sıfırlanan) ile **tamamen ayrı** bir mekanizma; ikisi toplanıp
+  `MoralModifiye`'yi oluşturuyor.
+
+**Doğrulama:**
+- **Birim testler** (`ClubCraft.MatchEngine.Domain.Tests/ClubPowerCalculatorTests.cs`,
+  mevcut `MatchSimulator_WeightedRandom_...` testiyle aynı desen): pozisyon
+  çarpanı tablosu (1.00/0.85/0.65/0.40, GK kenar durumları dahil);
+  deterministik bozuk-vs-doğru dizilim (`TeamPower` farkı 14.84, aynı 20 kişilik
+  kadro); **istatistiksel** 30 maçlık seri (aynı kadro, aynı sabit rakip) —
+  doğru dizilim **50 puan / 14 galibiyet**, bozuk dizilim (kaleci forvette +
+  bir stoper forvette) **33 puan / 8 galibiyet**; Moral clamp testi (3
+  galibiyet → 5'te kilitleniyor, simetrik olarak mağlubiyette −5, beraberlikte
+  0'a 1 birim yaklaşma) — hepsi geçti.
+- **Gerçek E2E** (`tests/run_e2e_test_powerrating.ps1`, gerçek Draft → Saga →
+  ClubManagement → RabbitMQ → MatchEngine → Postgres altyapısında, DB'den
+  `docker exec ... psql` ile kanıtlandı): iki gerçek kulüp draft edildi (19'ar
+  oyuncu), roster + lineup senkronunun `RosterPlayerSnapshot`/
+  `LineupSlotAssignment` tablolarında gerçekten oluştuğu doğrulandı. **Aynı
+  kadro, aynı sabit rakip, 14'er maçlık iki ayrı seri:** doğru dizilim **7G 3B
+  4M, 24 puan**; bozuk dizilim (aynı GK↔ST + CB↔ST takası) **3G 4B 7M, 13
+  puan** — DB'den birebir doğrulandı. **Moral:** gerçek 14 maçlık bir seride
+  Moral'in tekrar tekrar +5'e ulaşıp orada kilitlendiği, kayıplarda sınırlı
+  şekilde düştüğü ve hiçbir zaman [-5,+5] aralığını aşmadığı `ClubPowerRatings.Moral`
+  sorgularıyla doğrulandı (temiz bir "sıfırdan 3 art arda galibiyet" senaryosu
+  birim testte kanıtlandı — E2E'deki kulüp önceki fazlardan taşınan bir Moral
+  değeriyle başladığı için bu spesifik pencerede tam 3'lü seri rastlantısal
+  olarak oluşmadı, ama mekanizmanın kendisi DB'de defalarca doğrulandı).
+  **Sürpriz payı korunuyor:** doğru dizilimli Faz 1'de, İlk 11 ortalama
+  Overall'i daha YÜKSEK olan rakip (ClubOpp, ort. 75.9) daha DÜŞÜK ortalamalı
+  ClubA'ya (ort. 74.6) karşı sadece 4 galibiyet alabildi (ClubA 7 galibiyet
+  aldı) — kağıt üzerinde daha güçlü görünen taraf lig boyunca dominant
+  olmadı, spec'in "Football Manager mantığına uygun sürpriz payı" ilkesi
+  bozulmadı.
+
+> 📌 **Bilinen teknik borç (Match Engine güç formülü derinleştirmesinde
+> bilinçli olarak kabul edildi):** Formasyon slot ID → gerekli pozisyon
+> eşlemesi iki ayrı yerde, iki ayrı dilde, elle senkron tutuluyor:
+> `frontend/src/constants/formations.ts` (`FORMATIONS`, kullanıcının
+> gördüğü saha görünümü için) ve `MatchEngine.Domain.Services.FormationCatalog`
+> (backend'in Pozisyon Uyum Çarpanı hesaplayabilmesi için). İkisi de aynı 4
+> formasyonu (4-4-2, 4-3-3, 4-2-3-1, 3-5-2) ve aynı slot ID'lerini
+> (`"CB1"`, `"ST2"` vb.) taşımak zorunda — biri değişip diğeri
+> güncellenmezse (örn. yeni bir formasyon eklenirse), MatchEngine'in
+> pozisyon uyum hesabı frontend'in gösterdiği dizilimle sessizce
+> tutarsızlaşır. Şu an bilinçli olarak birleştirilmedi (frontend TypeScript,
+> backend C# — paylaşılan bir dosya pratik değil) ama **her yeni formasyon
+> eklendiğinde/değiştiğinde iki dosyanın da elle güncellendiği ayrıca
+> kontrol edilmeli** — `PlayerPosition` enum'ında yapıldığı gibi (bkz.
+> yukarıdaki pozisyon sistemi notu) tek bir paylaşılan kaynağa taşınması
+> ileride değerlendirilebilir.
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
