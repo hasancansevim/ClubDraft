@@ -102,10 +102,13 @@ public static class FormationCatalog
 }
 
 /// <summary>
-/// Pozisyon Uyum Carpani (spec.md, Match Engine guc formulu derinlestirme):
-/// tam eslesme 1.00, ayni aile farkli pozisyon 0.85, komsu aile
-/// (Defans↔OrtaSaha, OrtaSaha↔Hucum) 0.65, uzak aile (Defans↔Hucum,
-/// GK↔herhangi biri) 0.40.
+/// Pozisyon Uyum Carpani (spec.md, "Denge duzeltmesi: pozisyon carpani
+/// sertlestirme ve haftalik karar tavani" — 2026-08-29): tam eslesme 1.00,
+/// ayni aile farkli pozisyon 0.70, komsu aile (Defans↔OrtaSaha,
+/// OrtaSaha↔Hucum) 0.35, uzak aile (Defans↔Hucum, GK↔herhangi biri) 0.10.
+/// Eski tablo (1.00/0.85/0.65/0.40) tamamen yanlis dizilmis bir takimi
+/// yeterince cezalandirmiyordu — haftalik karar bonusuyla birlikte rekabetci
+/// kalabiliyordu (bkz. ayni tarihli tavan notu, ClubPowerRating.MoraleBonus).
 /// </summary>
 public static class PositionCompatibility
 {
@@ -127,12 +130,12 @@ public static class PositionCompatibility
         var requiredFamily = FamilyOf(requiredPosition);
 
         if (playerFamily == requiredFamily)
-            return 0.85;
+            return 0.70;
 
         // GK hicbir aileye komsu degil — GK disi bir pozisyonla eslesen GK
         // (veya tam tersi) her zaman "uzak aile" sayilir.
         if (playerFamily == PositionFamily.Goalkeeper || requiredFamily == PositionFamily.Goalkeeper)
-            return 0.40;
+            return 0.10;
 
         var isAdjacent =
             (playerFamily == PositionFamily.Defense && requiredFamily == PositionFamily.Midfield) ||
@@ -140,6 +143,6 @@ public static class PositionCompatibility
             (playerFamily == PositionFamily.Midfield && requiredFamily == PositionFamily.Attack) ||
             (playerFamily == PositionFamily.Attack && requiredFamily == PositionFamily.Midfield);
 
-        return isAdjacent ? 0.65 : 0.40; // kalan tek olasilik: Defans↔Hucum
+        return isAdjacent ? 0.35 : 0.10; // kalan tek olasilik: Defans↔Hucum
     }
 }

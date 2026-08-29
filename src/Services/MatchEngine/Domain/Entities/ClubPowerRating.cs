@@ -19,8 +19,26 @@ public class ClubPowerRating
     public Guid RoomId { get; private set; }
     public string Formation { get; private set; } = FormationCatalog.DefaultFormation;
 
-    /// <summary>Haftalik karardan (MoraleBonus) gelen tek seferlik bonus — her mac sonrasi sifirlanir.</summary>
+    /// <summary>
+    /// Haftalik karardan (HireCoach/StadiumInvestment/MoraleBonus) gelen bonus
+    /// — her mac sonrasi sifirlanir. Ama bu sifirlama SADECE kulubun o hafta
+    /// gercekten bir mac oynamasina bagli (bkz. SimulateMatchesForWeekCommandHandler);
+    /// bye haftasi gibi mac oynanmayan bir haftada karar alinirsa sifirlanmadan
+    /// bir sonraki haftanin bonusunun ustune eklenir. <see cref="MoraleBonusCap"/>
+    /// bu birikimin (kac hafta/karar arka arkaya gelirse gelsin) belirli bir
+    /// tavani asmasini engelliyor — "denge duzeltmesi" notuna bkz. (spec.md,
+    /// 2026-08-29).
+    /// </summary>
     public int MoraleBonus { get; private set; }
+
+    /// <summary>
+    /// Tek bir haftada alinabilecek TUM haftalik kararlarin (HireCoach +
+    /// StadiumInvestment + MoraleBonus, su anki eslemeyle 5+10+0=15) toplami
+    /// zaten bu tavana esit — yani "bir haftada olabilecek en iyi durum"un
+    /// USTUNE hicbir sekilde (ne art arda karar, ne mac atlanan bir hafta)
+    /// cikilamiyor.
+    /// </summary>
+    private const int MoraleBonusCap = 15;
 
     /// <summary>
     /// Mac sonucu bazli, surekli guncellenen moral — [-5, +5] araliginda
@@ -72,7 +90,7 @@ public class ClubPowerRating
 
     public void ApplyMoraleBonus(int bonus)
     {
-        MoraleBonus += bonus;
+        MoraleBonus = Math.Min(MoraleBonusCap, MoraleBonus + bonus);
     }
 
     public void ResetMoraleBonus()

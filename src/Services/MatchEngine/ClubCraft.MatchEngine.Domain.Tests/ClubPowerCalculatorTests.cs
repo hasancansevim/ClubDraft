@@ -105,19 +105,19 @@ public class ClubPowerCalculatorTests
         Assert.Equal(1.00, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.CB));
         Assert.Equal(1.00, PositionCompatibility.Multiplier(PlayerPosition.GK, PlayerPosition.GK));
 
-        // Ayni aile, farkli pozisyon -> 0.85
-        Assert.Equal(0.85, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.RB));
-        Assert.Equal(0.85, PositionCompatibility.Multiplier(PlayerPosition.CM, PlayerPosition.CDM));
-        Assert.Equal(0.85, PositionCompatibility.Multiplier(PlayerPosition.ST, PlayerPosition.RW));
+        // Ayni aile, farkli pozisyon -> 0.70 (denge duzeltmesi: eskiden 0.85, bkz. spec.md 2026-08-29)
+        Assert.Equal(0.70, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.RB));
+        Assert.Equal(0.70, PositionCompatibility.Multiplier(PlayerPosition.CM, PlayerPosition.CDM));
+        Assert.Equal(0.70, PositionCompatibility.Multiplier(PlayerPosition.ST, PlayerPosition.RW));
 
-        // Komsu aile (Defans<->OrtaSaha, OrtaSaha<->Hucum) -> 0.65
-        Assert.Equal(0.65, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.CM));
-        Assert.Equal(0.65, PositionCompatibility.Multiplier(PlayerPosition.CM, PlayerPosition.ST));
+        // Komsu aile (Defans<->OrtaSaha, OrtaSaha<->Hucum) -> 0.35 (eskiden 0.65)
+        Assert.Equal(0.35, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.CM));
+        Assert.Equal(0.35, PositionCompatibility.Multiplier(PlayerPosition.CM, PlayerPosition.ST));
 
-        // Uzak aile (Defans<->Hucum, GK<->herhangi biri) -> 0.40
-        Assert.Equal(0.40, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.ST));
-        Assert.Equal(0.40, PositionCompatibility.Multiplier(PlayerPosition.GK, PlayerPosition.CB));
-        Assert.Equal(0.40, PositionCompatibility.Multiplier(PlayerPosition.GK, PlayerPosition.ST));
+        // Uzak aile (Defans<->Hucum, GK<->herhangi biri) -> 0.10 (eskiden 0.40)
+        Assert.Equal(0.10, PositionCompatibility.Multiplier(PlayerPosition.CB, PlayerPosition.ST));
+        Assert.Equal(0.10, PositionCompatibility.Multiplier(PlayerPosition.GK, PlayerPosition.CB));
+        Assert.Equal(0.10, PositionCompatibility.Multiplier(PlayerPosition.GK, PlayerPosition.ST));
     }
 
     [Fact]
@@ -133,9 +133,67 @@ public class ClubPowerCalculatorTests
 
         Assert.True(broken.TeamPower < correct.TeamPower,
             "Bozuk dizilim (kaleci forvette vb.), ayni kadroyla dogru diziliminden daha yuksek/esit guc uretmemeli.");
-        Assert.True(correct.TeamPower - broken.TeamPower > 8,
+        Assert.True(correct.TeamPower - broken.TeamPower > 15,
             $"Fark cok kucuk ({correct.TeamPower - broken.TeamPower:F2}), pozisyon carpaninin etkisi beklenenden zayif.");
     }
+
+    /// <summary>
+    /// Denge duzeltmesi regresyonu (spec.md, 2026-08-29): tamamen yanlis
+    /// dizilmis (11 slotun HICBIRINDE doğru pozisyon eslesmesi olmayan) +
+    /// o hafta alinabilecek TUM haftalik kararlarin (HireCoach+StadiumInvestment+
+    /// MoraleBonus) tavana carpmis toplami (MoraleBonus=15, capped) bir kulup,
+    /// dogru dizilmis + hic haftalik karar almamis AYNI kadroyla karsilastirildiginda
+    /// hala belirgin sekilde (en az %30) daha dusuk TeamPower uretmeli. Bu, daha
+    /// once (eski 1.00/0.85/0.65/0.40 tablosu + tavansiz MoraleBonus ile) esitlenebilen
+    /// bir denge hatasinin duzeltildigini kanitliyor.
+    /// </summary>
+    [Fact]
+    public void Calculate_FullyWrongLineupWithMaxWeeklyBonus_StillSignificantlyWeakerThanCorrectLineupWithNoBonus()
+    {
+        var squad = BuildSquad();
+
+        var correctRating = BuildRating(squad, CorrectLineup(squad));
+
+        var fullyWrongRating = BuildRating(squad, FullyWrongLineup(squad));
+        fullyWrongRating.ApplyMoraleBonus(5);  // HireCoach
+        fullyWrongRating.ApplyMoraleBonus(10); // StadiumInvestment (ayni hafta) -> tavana (15) carpiyor
+        fullyWrongRating.ApplyMoraleBonus(10); // bir hafta daha (bye/gecikme senaryosu) -> tavan olmasa 25 olurdu
+
+        var correct = _calculator.Calculate(correctRating);
+        var wrong = _calculator.Calculate(fullyWrongRating);
+
+        var relativeDrop = (correct.TeamPower - wrong.TeamPower) / correct.TeamPower;
+
+        _output.WriteLine($"Dogru dizilim, karar yok      -> TeamPower={correct.TeamPower:F2}");
+        _output.WriteLine($"Tamamen yanlis dizilim + max karar (MoraleBonus={fullyWrongRating.MoraleBonus}, tavan=15) -> TeamPower={wrong.TeamPower:F2}");
+        _output.WriteLine($"Goreceli fark: %{relativeDrop * 100:F1}");
+
+        Assert.Equal(15, fullyWrongRating.MoraleBonus); // tavan gercekten 15'te kilitlenmis olmali (25 degil)
+        Assert.True(wrong.TeamPower < correct.TeamPower,
+            "Tamamen yanlis dizilim + max karar, dogru dizilim + karar yoktan daha guclu/esit cikmamali.");
+        Assert.True(relativeDrop >= 0.30,
+            $"Goreceli fark yeterince buyuk degil (%{relativeDrop * 100:F1}), en az %30 bekleniyordu.");
+    }
+
+    /// <summary>
+    /// Butun 11 slotta gercek pozisyonla gerekli pozisyon en az "komsu aile"
+    /// kadar uzak olacak sekilde tam bir karistirma (hicbir slotta 1.00 ya da
+    /// 0.70 yok) — "kadro tamamen yanlis dizilmis" senaryosunun en agir hali.
+    /// </summary>
+    private static Dictionary<string, Guid?> FullyWrongLineup(List<SquadPlayer> squad) => new()
+    {
+        ["ST1"] = squad[0].Id,  // GK -> ST (uzak aile)
+        ["RM"] = squad[1].Id,   // LB -> RM (komsu aile)
+        ["ST2"] = squad[2].Id,  // CB -> ST (uzak aile)
+        ["CM2"] = squad[3].Id,  // CB -> CM (komsu aile)
+        ["LM"] = squad[4].Id,   // RB -> LM (komsu aile)
+        ["CB1"] = squad[5].Id,  // LM -> CB (komsu aile)
+        ["CB2"] = squad[6].Id,  // CM -> CB (komsu aile)
+        ["RB"] = squad[7].Id,   // CM -> RB (komsu aile)
+        ["LB"] = squad[8].Id,   // RM -> LB (komsu aile)
+        ["GK"] = squad[9].Id,   // ST -> GK (uzak aile)
+        ["CM1"] = squad[10].Id, // ST -> CM (komsu aile)
+    };
 
     [Fact]
     public void Simulate_BrokenLineup_ScoresFewerPointsThanCorrectLineupOverManyMatches()

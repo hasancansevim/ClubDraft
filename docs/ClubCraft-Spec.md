@@ -819,6 +819,58 @@ hangi slotta olduğunu bilme imkânı **hiç yoktu**.
 > yukarıdaki pozisyon sistemi notu) tek bir paylaşılan kaynağa taşınması
 > ileride değerlendirilebilir.
 
+### Denge düzeltmesi: pozisyon çarpanı sertleştirme ve haftalık karar tavanı (2026-08-29)
+
+**Rapor edilen sorun:** Tamamen yanlış dizilmiş (pozisyon uyumsuz) + her
+hafta maksimum haftalık karar alınmış bir kulüp, doğru dizilmiş + hiç
+haftalık karar almamış bir kulüple sezon sonunda aynı puanı aldı.
+
+**Teşhis:**
+- `ClubPowerRating.MoraleBonus` (haftalık kararlardan gelen güç bonusu:
+  `WeeklyDecisionMadeEventConsumer`'da HireCoach +5, StadiumInvestment +10)
+  **tavansız** birikiyordu (`MoraleBonus += bonus`). Bu bonus sadece
+  kulübün o hafta **gerçekten bir maç oynamasıyla** sıfırlanıyor
+  (`SimulateMatchesForWeekCommandHandler` → `ResetMoraleBonus()`) — tek
+  seferlik/sabit değil, ama "sezon boyunca sınırsız büyüyen" bir hata da
+  değildi; asıl kırılgan nokta, sıfırlamanın **maça bağlı** olmasıydı: bye
+  haftası gibi o hafta maçı olmayan bir durumda (tek sayıda takımlı lig)
+  bonus sıfırlanmadan bir sonraki haftanın kararının üzerine ekleniyor,
+  art arda birkaç böyle hafta bonus'u önemli ölçüde şişirebiliyordu.
+- Eski Pozisyon Uyum Çarpanı tablosu (1.00/0.85/0.65/0.40) tek başına,
+  bu şişebilen bonusu dengeleyecek kadar sert değildi — kısmi bir yanlış
+  dizilim bile (bkz. birim testler) haftalık karar bonusuyla rahatça
+  telafi edilebiliyordu.
+
+**Düzeltme:**
+1. **`ClubPowerRating.MoraleBonus`'a sabit tavan (15):**
+   `ApplyMoraleBonus` artık `MoraleBonus = Math.Min(15, MoraleBonus + bonus)`
+   şeklinde. 15, mevcut eşlemeyle "bir haftada alınabilecek tüm kararların
+   toplamına" (HireCoach 5 + StadiumInvestment 10 = 15) zaten eşit — yani
+   ne art arda karar alınsın ne de kaçırılan bir maç yüzünden sıfırlama
+   gecikmesin, bu bonus **hiçbir zaman** "bir haftanın en iyi durumu"nu
+   aşamıyor. Azalan getiri modeli (+10, +5, +2.5, ...) yerine sabit tavan
+   seçildi: azalan getiri, "kaçıncı alım" bilgisini ayrıca bir sayaçla
+   tutmayı gerektirir ve o sayacın ne zaman sıfırlanacağı sorusu (haftalık
+   mı, hiç mi) tam olarak bu hatayı yaratan "sıfırlama ne zaman olur"
+   belirsizliğini tekrar eder. Sabit tavan hem daha az kod hem de sıfırlama
+   zamanlamasından tamamen bağımsız — bye haftası riskini de kökten kapatıyor.
+2. **Pozisyon Uyum Çarpanı sertleştirildi:** 1.00 / 0.85 / 0.65 / 0.40 →
+   **1.00 / 0.70 / 0.35 / 0.10**. Aynı aile farklı pozisyon artık %30 güç
+   kaybı, komşu aile %65, uzak aile (Defans↔Hücum, GK↔herhangi biri) **%90
+   güç kaybı** — "tamamen yanlış dizilmiş bir takım rekabetçi olamamalı"
+   hissi net veriliyor.
+
+**Doğrulama (birim test seviyesinde, `ClubPowerCalculatorTests.cs`):**
+yeni `Calculate_FullyWrongLineupWithMaxWeeklyBonus_StillSignificantlyWeakerThanCorrectLineupWithNoBonus`
+testi, 11 slotun **hiçbirinde** doğru pozisyon eşleşmesi olmayan bir
+dizilime aynı hafta içinde 3 kez haftalık karar bonusu uygulayıp (tavan
+gerçekten 15'te kilitli kaldığı, 25'e çıkmadığı ayrıca doğrulanıyor)
+doğru dizilim + sıfır bonus ile karşılaştırıyor: **TeamPower 81.07 → 49.18,
+%39.3 göreceli fark** (istenen %30-40 aralığında). Mevcut kısmi-bozuk-dizilim
+testi de yeni tablo ile güncellendi (fark 14.84 → 22.25). Tüm 9 birim test
+geçti. Kapsamlı E2E/DB doğrulaması bilinçli olarak ertelendi (frontend
+görsel işleri bitince genel bir testte yapılacak).
+
 ## 5. Teknoloji Yığını
 
 > ⚠️ **Önemli sürüm notu (Draft servisi kurulumunda keşfedildi):** MassTransit
